@@ -72,7 +72,7 @@ SV *_replace_str( char *src, int len, SV *map ) {
             } else {
               /* grow the string */
               tmp = Perl_realloc( str, str_size );
-              if ( !tmp ) Perl_croak( "failed to realloc string" );
+              if ( !tmp ) Perl_croak(aTHX_ "failed to realloc string" );
               str = tmp;
             }
           }
