@@ -43,7 +43,9 @@ SV *_replace_str( char *src, int len, SV *map ) {
 
   for ( i = 0; i < len; ++i, ++ptr, ++ix_newstr ) {
     char c = *ptr;
-    int  ix = (int) c;
+    int  ix = (int) ( c );
+    if ( ix < 0 ) ix = 256 + ix;
+    // need to croak in DEBUG mode if char is invalid
 
     str[ix_newstr] = c; /* default always performed... */
     if ( ix >= AvFILL(mapav) || !AvARRAY(mapav)[ix] ) {
