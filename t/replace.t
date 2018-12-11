@@ -77,6 +77,11 @@ EOS
             replace_xs => sub {
                 return Char::Replace::replace( $STR, \@MAP );
             },
+            substitute => sub {
+                my $str = $STR;
+                $str =~ s/(.)/$MAP[ord($1)]/og;
+                return $str;
+            },            
         };
 
         # sanity check
@@ -89,6 +94,7 @@ EOS
         $STR = $latin;
 
         is $subs->{replace_xs}->(), $subs->{transliteration}->(), "replace_xs eq transliteration" or die;
+        is $subs->{substitute}->(), $subs->{transliteration}->(), "replace_xs eq transliteration" or die;
 
         Benchmark::cmpthese( -5 => $subs );
 
@@ -116,6 +122,11 @@ replace_xs      247327/s            120%              --
             replace_xs => sub {
                 return Char::Replace::replace( $STR, \@MAP );
             },
+            substitute => sub {
+                my $str = $STR;
+                $str =~ s/(.)/$MAP[ord($1)]/og;
+                return $str;
+            },
         };
 
         # sanity check
@@ -126,6 +137,7 @@ replace_xs      247327/s            120%              --
         $STR = $latin;
 
         is $subs->{replace_xs}->(), $subs->{substitute_x2}->(), "replace_xs eq substitute_x2" or die;
+        is $subs->{substitute}->(), $subs->{substitute_x2}->(), "substitute eq substitute_x2" or die;
 
         note "short string";
         $STR = q[abcdabcd];

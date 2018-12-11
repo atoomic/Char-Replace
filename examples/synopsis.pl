@@ -69,6 +69,11 @@ EOS
             replace_xs => sub {
                 return Char::Replace::replace( $STR, \@MAP );
             },
+            substitute => sub {
+                my $str = $STR;
+                $str =~ s/(.)/$MAP[ord($1)]/og;
+                return $str;
+            },
         };
 
         # set our replacement map
@@ -81,13 +86,15 @@ EOS
         # sanity check
         $STR = $latin;
         is $subs->{replace_xs}->(), $subs->{transliteration}->(), "replace_xs eq transliteration" or die;
+        is $subs->{substitute}->(), $subs->{transliteration}->(), "substitute eq transliteration" or die;
 
         Benchmark::cmpthese( -5 => $subs );
 
 =pod
-                    Rate transliteration      replace_xs
-transliteration 209967/s              --            -50%
-replace_xs      422681/s            101%              --     
+                    Rate      substitute transliteration      replace_xs
+substitute        7245/s              --            -97%            -98%
+transliteration 214237/s           2857%              --            -50%
+replace_xs      431960/s           5862%            102%              --
 =cut
 
     }
@@ -108,6 +115,11 @@ replace_xs      422681/s            101%              --
             replace_xs => sub {
                 return Char::Replace::replace( $STR, \@MAP );
             },
+            substitute => sub {
+                my $str = $STR;
+                $str =~ s/(.)/$MAP[ord($1)]/og;
+                return $str;
+            },            
         };
 
         # sanity check
@@ -118,15 +130,17 @@ replace_xs      422681/s            101%              --
         $STR = $latin;
 
         is $subs->{replace_xs}->(), $subs->{substitute_x2}->(), "replace_xs eq substitute_x2" or die;
+        is $subs->{substitute}->(), $subs->{substitute}->(), "replace_xs eq substitute_x2" or die;
 
         note "short string";
         $STR = q[abcdabcd];
         Benchmark::cmpthese( -5 => $subs );
 
 =pod
-                   Rate substitute_x2    replace_xs
-substitute_x2  688590/s            --          -74%
-replace_xs    2648099/s          285%            --
+                   Rate    substitute substitute_x2    replace_xs
+substitute     207162/s            --          -70%          -93%
+substitute_x2  685956/s          231%            --          -75%
+replace_xs    2796596/s         1250%          308%            --
 =cut
 
         note "latin string";
@@ -134,9 +148,10 @@ replace_xs    2648099/s          285%            --
         Benchmark::cmpthese( -5 => $subs );
 
 =pod
-                  Rate substitute_x2    replace_xs
-substitute_x2 109027/s            --          -72%
-replace_xs    387975/s          256%            --
+                  Rate    substitute substitute_x2    replace_xs
+substitute      7229/s            --          -93%          -98%
+substitute_x2 109237/s         1411%            --          -72%
+replace_xs    395958/s         5377%          262%            --
 =cut
 
         note "longer string: latin string x100";
@@ -144,9 +159,10 @@ replace_xs    387975/s          256%            --
         Benchmark::cmpthese( -5 => $subs );
 
 =pod
-                Rate substitute_x2    replace_xs
-substitute_x2 1536/s            --          -70%
-replace_xs    5060/s          229%            --
+                Rate    substitute substitute_x2    replace_xs
+substitute    74.0/s            --          -95%          -99%
+substitute_x2 1518/s         1951%            --          -70%
+replace_xs    5022/s         6685%          231%            --
 =cut
 
     }
