@@ -106,8 +106,6 @@ The UTF-8 state of a string is preserved.
 
 =over
 
-=item support UTF-8 characters...
-
 =item handle IV in the map (at this time only PV are expected)
 
 =back

@@ -441,7 +441,6 @@ xs_trim       1810099/s        14556%         9130%            --
 
 # TODO
 
-- support UTF-8 characters...
 - handle IV in the map (at this time only PV are expected)
 
 # LICENSE

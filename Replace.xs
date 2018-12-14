@@ -18,7 +18,7 @@
 
 #define IS_SPACE(c) c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == '\f'
 
-SV *_replace_str( char *src, int len, SV *map );
+SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 
 SV *_trim_sv( SV *sv ) {
@@ -43,9 +43,10 @@ SV *_trim_sv( SV *sv ) {
 }
 
 
-SV *_replace_str( char *src, int len, SV *map ) {
+SV *_replace_str( SV *sv, SV *map ) {
   char buffer[_REPLACE_BUFFER_SIZE] = { 0 };
-
+  char *src = SvPVX(sv);
+  int len = SvCUR(sv);
   int           i = 0;
   char     *ptr = src;
   char           *str = buffer;             /* the new string we are going to use */
@@ -55,7 +56,6 @@ SV *_replace_str( char *src, int len, SV *map ) {
   AV           *mapav;
   SV           *reply;
 
- 
   if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV 
     || AvFILL( SvRV(map) ) <= 0
     ) {
@@ -114,8 +114,8 @@ SV *_replace_str( char *src, int len, SV *map ) {
   }
 
   str[ix_newstr] = '\0'; /* add the final trailing \0 character */
-  reply = newSVpv( str, ix_newstr );
-
+  reply = newSVpvn_flags( str, ix_newstr, SvUTF8(sv) );
+ 
   /* free our tmp buffer if needed */
   if ( str != buffer ) free(str);
 
@@ -125,12 +125,12 @@ SV *_replace_str( char *src, int len, SV *map ) {
 MODULE = Char__Replace       PACKAGE = Char::Replace
 
 SV*
-replace(str, map)
-  SV *str;
+replace(sv, map)
+  SV *sv;
   SV *map;
 CODE:
-  if ( str && SvPOK(str) ) {
-     RETVAL = _replace_str( SvPVX(str), SvCUR(str), map );
+  if ( sv && SvPOK(sv) ) {
+     RETVAL = _replace_str( sv, map );
   } else {
      RETVAL = &PL_sv_undef;
   }
