@@ -56,6 +56,12 @@ Set your replacement characters
 
 is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
 
+{ # trim XS helper
+    # remove spaces at the beginning and end of a string - XS helper
+
+    is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];    
+}
+
 done_testing;
 ```
 
@@ -97,6 +103,17 @@ $map->[ ord('a') ] = q[XYZ]; # replace 'a' by 'XYZ'
 # replaces all 'a' by 'XYZ'
 Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
 ```
+
+## $string = trim( $string )
+
+trim removes all trailing and leading characters of a string
+Trailing and leading space characters  ' ', '\\r', '\\n', '\\t', '\\f' are removed.
+A new string is returned.
+
+The removal is performed in XS.
+We only need to look at the beginning and end of the string.
+
+The UTF-8 state of a string is preserved.
 
 # Benchmarks
 

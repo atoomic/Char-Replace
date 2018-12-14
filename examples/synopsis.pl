@@ -43,4 +43,10 @@ Set your replacement characters
 
 is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
 
+{ # trim XS helper
+    # remove spaces at the beginning and end of a string - XS helper
+
+    is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];    
+}
+
 done_testing;

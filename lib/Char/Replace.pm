@@ -80,6 +80,16 @@ You can then adjust one or several characters.
     # replaces all 'a' by 'XYZ'
     Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
 
+=head2 $string = trim( $string )
+
+trim removes all trailing and leading characters of a string
+Trailing and leading space characters  ' ', '\r', '\n', '\t', '\f' are removed.
+A new string is returned.
+
+The removal is performed in XS.
+We only need to look at the beginning and end of the string.
+
+The UTF-8 state of a string is preserved.
 
 =head1 Benchmarks
 
