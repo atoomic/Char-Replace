@@ -53,17 +53,6 @@ XS helpers to perform some basic character replacement on strings.
 
 =back
 
-=head1 Limitations
-
-Be aware, that this software is in a very alpha state at this stage.
-Use it as it, patches are welcome.
-
-=over
-
-=item do not handle UTF-8 characters (only ASCII at this stage)
-
-=back
-
 =head1 Available functions
 
 =head2 $output = replace( $string, $MAP )
@@ -115,6 +104,11 @@ The UTF-8 state of a string is preserved.
 =item handle IV in the map (at this time only PV are expected)
 
 =back
+
+=head1 Warnings
+
+Be aware, that this software is still in a very alpha state at this stage.
+Use it as it, patches are welcome. 
 
 =head1 LICENSE
 

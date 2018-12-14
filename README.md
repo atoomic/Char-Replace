@@ -74,13 +74,6 @@ XS helpers to perform some basic character replacement on strings.
 - replace: replace (transliterate) one or more ASCII characters
 - trim: remove leading and trailing spaces of a string
 
-# Limitations
-
-Be aware, that this software is in a very alpha state at this stage.
-Use it as it, patches are welcome.
-
-- do not handle UTF-8 characters (only ASCII at this stage)
-
 # Available functions
 
 ## $output = replace( $string, $MAP )
@@ -443,6 +436,11 @@ xs_trim       1810099/s        14556%         9130%            --
 # TODO
 
 - handle IV in the map (at this time only PV are expected)
+
+# Warnings
+
+Be aware, that this software is still in a very alpha state at this stage.
+Use it as it, patches are welcome. 
 
 # LICENSE
 
