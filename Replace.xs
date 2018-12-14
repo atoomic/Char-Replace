@@ -27,21 +27,20 @@ SV *_trim_sv( SV *sv ) {
   int len  = SvCUR(sv);
   char *str = src;
   char *end = src + len - 1;
-  int new_len = len;
 
   // Skip whitespace at front...
   while ( IS_SPACE( (unsigned char) *str) ) {
     ++str;
-    --new_len;
+    --len;
   }
 
   // Trim at end...
   while (end > str && isspace( (unsigned char) *end) ) {
-    *end-- = 0;
-    --new_len;
+    *end--;// = 0;
+    --len;
   }
 
-  return newSVpvn_flags( str, new_len, SvUTF8(sv) );
+  return newSVpvn_flags( str, len, SvUTF8(sv) );
 }
 
 
@@ -140,7 +139,7 @@ OUTPUT:
   RETVAL
 
 SV*
-trim_spaces(sv)
+trim(sv)
   SV *sv;
 CODE:
   if ( sv && SvPOK(sv) ) {
