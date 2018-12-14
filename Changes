@@ -2,6 +2,8 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+0.003     2018-12-14 15:30:08-06:00 America/Chicago
+
 - add a trim XS helper (and some benchmark) with UTF-8 support
 - basic UTF-8 support for replace
 
