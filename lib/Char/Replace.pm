@@ -81,6 +81,16 @@ You can then adjust one or several characters.
     Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
 
 
+=head1 Benchmarks
+
+=head2 char_replace
+
+# EXAMPLE: examples/benchmark-replace.pl
+
+=head2 trim
+
+# EXAMPLE: examples/benchmark-trim.pl
+
 
 =head1 TODO
 
