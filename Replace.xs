@@ -16,7 +16,34 @@
 
 #define _REPLACE_BUFFER_SIZE 64
 
+#define IS_SPACE(c) c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == '\f'
+
 SV *_replace_str( char *src, int len, SV *map );
+SV *_trim_sv( SV *sv );
+
+SV *_trim_sv( SV *sv ) {
+
+  char *src = SvPVX(sv);
+  int len  = SvCUR(sv);
+  char *str = src;
+  char *end = src + len - 1;
+  int new_len = len;
+
+  // Skip whitespace at front...
+  while ( IS_SPACE( (unsigned char) *str) ) {
+    ++str;
+    --new_len;
+  }
+
+  // Trim at end...
+  while (end > str && isspace( (unsigned char) *end) ) {
+    *end-- = 0;
+    --new_len;
+  }
+
+  return newSVpvn_flags( str, new_len, SvUTF8(sv) );
+}
+
 
 SV *_replace_str( char *src, int len, SV *map ) {
   char buffer[_REPLACE_BUFFER_SIZE] = { 0 };
@@ -99,7 +126,6 @@ SV *_replace_str( char *src, int len, SV *map ) {
 
 MODULE = Char__Replace       PACKAGE = Char::Replace
 
-
 SV*
 replace(str, map)
   SV *str;
@@ -107,6 +133,18 @@ replace(str, map)
 CODE:
   if ( str && SvPOK(str) ) {
      RETVAL = _replace_str( SvPVX(str), SvCUR(str), map );
+  } else {
+     RETVAL = &PL_sv_undef;
+  }
+OUTPUT:
+  RETVAL
+
+SV*
+trim_spaces(sv)
+  SV *sv;
+CODE:
+  if ( sv && SvPOK(sv) ) {
+     RETVAL = _trim_sv( sv );
   } else {
      RETVAL = &PL_sv_undef;
   }
