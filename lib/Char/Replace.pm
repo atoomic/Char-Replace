@@ -43,9 +43,15 @@ Char::Replace sample usage
 
 Char::Replace
 
-XS helper to replace (transliterate) one or more ASCII characters
+XS helpers to perform some basic character replacement on strings.
 
-This right now pretty similar to a double split like this one
+=over
+
+=item replace: replace (transliterate) one or more ASCII characters
+
+=item trim: remove leading and trailing spaces of a string
+
+=back
 
 =head1 Limitations
 

@@ -69,9 +69,10 @@ done_testing;
 
 Char::Replace
 
-XS helper to replace (transliterate) one or more ASCII characters
+XS helpers to perform some basic character replacement on strings.
 
-This right now pretty similar to a double split like this one
+- replace: replace (transliterate) one or more ASCII characters
+- trim: remove leading and trailing spaces of a string
 
 # Limitations
 
