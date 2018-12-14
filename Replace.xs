@@ -23,10 +23,9 @@ SV *_trim_sv( SV *sv );
 
 SV *_trim_sv( SV *sv ) {
 
-  char *src = SvPVX(sv);
   int len  = SvCUR(sv);
-  char *str = src;
-  char *end = src + len - 1;
+  char *str = SvPVX(sv);;
+  char *end = str + len - 1;
 
   // Skip whitespace at front...
   while ( IS_SPACE( (unsigned char) *str) ) {
