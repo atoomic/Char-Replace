@@ -1,5 +1,7 @@
 Revision history for Char-Replace
 
+- fix issue when growing a string containing a '\0'
+
 {{$NEXT}}
 
 0.003     2018-12-14 15:30:08-06:00 America/Chicago
