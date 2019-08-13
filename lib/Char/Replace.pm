@@ -60,7 +60,7 @@ XS helpers to perform some basic character replacement on strings.
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
 Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid
 
-view synopsys or example just after.
+view L</SYNOPSIS> or example just after.
 
 =head2 $map = identity_map()
 
