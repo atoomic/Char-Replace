@@ -25,6 +25,17 @@ perl:
   - "5.14"
   - "5.12"
   - "5.10"
+
+before_install:
+  - mkdir /home/travis/bin || true
+  - ln -s `which true` /home/travis/bin/cpansign
+  - eval $(curl https://travis-perl.github.io/init) --auto
+  - cpanm -n App::cpm Carton::Snapshot
+  - cpm install -g --without-test Test2::Bundle::Extended Test2::Tools::Explain Test2::Plugin::NoWarnings
+
+install:
+  - cpm install -g --without-test --cpanfile cpanfile
+
 script:
   - perl Makefile.PL && make test
 
