@@ -4,7 +4,7 @@ Char::Replace - Perl naive XS character replacement as an alternate to substitut
 
 # VERSION
 
-version 0.004
+version 0.005
 
 # SYNOPSIS
 
@@ -81,7 +81,7 @@ XS helpers to perform some basic character replacement on strings.
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
 Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid
 
-view synopsys or example just after.
+view ["SYNOPSIS"](#synopsis) or example just after.
 
 ## $map = identity\_map()
 
