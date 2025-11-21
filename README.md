@@ -4,7 +4,7 @@ Char::Replace - Perl naive XS character replacement as an alternate to substitut
 
 # VERSION
 
-version 0.005
+version 0.006
 
 # SYNOPSIS
 
