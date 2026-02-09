@@ -57,6 +57,7 @@ SV *_replace_str( SV *sv, SV *map ) {
   STRLEN   ix_newstr = 0;
   AV           *mapav;
   SV           *reply;
+  SSize_t       map_top;                    /* highest valid index in the map */
 
   if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
     || AvFILL( SvRV(map) ) <= 0
@@ -71,19 +72,18 @@ SV *_replace_str( SV *sv, SV *map ) {
 
   mapav = (AV *)SvRV(map);
   SV **ary = AvARRAY(mapav);
+  map_top = AvFILL(mapav);
 
   /* Always allocate memory using Perl's memory management */
   Newx(str, str_size, char);
-
 
   for ( i = 0; i < len; ++i, ++ptr, ++ix_newstr ) {
     char c = *ptr;
     int  ix = (int) ( c );
     if ( ix < 0 ) ix = 256 + ix;
-    // need to croak in DEBUG mode if char is invalid
 
     str[ix_newstr] = c; /* default always performed... */
-    if ( ix >= AvFILL(mapav)
+    if ( ix > map_top
       || !ary[ix]
       ) {
       continue;
@@ -92,10 +92,10 @@ SV *_replace_str( SV *sv, SV *map ) {
       if ( SvPOK( entry ) ) {
         STRLEN slen;
         char *replace = SvPV( entry, slen ); /* length of the string used for replacement */
-        if ( slen <= 0  ) {
+        if ( slen == 0  ) {
           continue;
         } else {
-          int j;
+          STRLEN j;
 
           /* Check if we need to expand. */
           if (str_size <= (ix_newstr + slen + 1) ) { /* +1 for \0 */
@@ -116,7 +116,7 @@ SV *_replace_str( SV *sv, SV *map ) {
           str[ix_newstr] = replace[j];
         }
       } /* end - SvPOK */
-    } /* end - AvFILL || AvARRAY */
+    } /* end - map_top || AvARRAY */
   }
 
   str[ix_newstr] = '\0'; /* add the final trailing \0 character */
