@@ -54,4 +54,12 @@ use Char::Replace;
     is $str, q[   some spaces   ], 'original PV preserved';
 } 
 
+{
+    note "edge cases: empty and all-whitespace strings";
+    is Char::Replace::trim(''),       '',  "trim( '' ) - empty string";
+    is Char::Replace::trim('   '),    '',  "trim( '   ' ) - only spaces";
+    is Char::Replace::trim("\n\r\t"), '',  "trim( newlines/tabs ) - only whitespace";
+    is Char::Replace::trim(' '),      '',  "trim( ' ' ) - single space";
+}
+
 done_testing;
