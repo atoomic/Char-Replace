@@ -10,13 +10,20 @@ on:
     branches:
       - '*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
 
 ###
 ### Fast Test on System Perl
 ###
 
-  ubuntu-latest:
+  ubuntu-system-perl:
     runs-on: ubuntu-latest
 
     env:
@@ -24,6 +31,32 @@ jobs:
       AUTHOR_TESTING: 1
       AUTOMATED_TESTING: 1
       RELEASE_TESTING: 1
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: perl -V
+      - name: install deps using cpm
+        uses: perl-actions/install-with-cpm@v1
+        with:
+          sudo: false
+          global: false
+          cpanfile: "cpanfile"
+          args: "--with-all"
+      - name: Set PERL5LIB to local lib
+        run: echo "PERL5LIB=$(pwd)/local/lib/perl5" >> $GITHUB_ENV
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+###
+### macOS
+###
+
+  macos:
+    runs-on: macos-latest
+
+    env:
+      PERL_USE_UNSAFE_INC: 0
 
     steps:
       - uses: actions/checkout@v4
@@ -62,8 +95,10 @@ jobs:
     name: "perl ${{ matrix.perl-version }}"
 
     needs:
-      - ubuntu-latest
+      - ubuntu-system-perl
       - perl-versions
+
+    continue-on-error: ${{ matrix.perl-version == 'devel' }}
 
     strategy:
       fail-fast: false
@@ -76,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: perl -V
-      - name: install deps using cpanm
+      - name: install deps using cpm
         uses: perl-actions/install-with-cpm@v1
         with:
           sudo: false
