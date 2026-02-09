@@ -14,27 +14,30 @@
 #include <XSUB.h>
 #include <embed.h>
 
-#define _REPLACE_BUFFER_SIZE 64
-
-#define IS_SPACE(c) c == ' ' || c == '\n' || c == '\r' || c == '\t' || c == '\f'
+#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f')
 
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 
 SV *_trim_sv( SV *sv ) {
   dTHX;
-  int len  = SvCUR(sv);
-  char *str = SvPVX(sv);;
-  char *end = str + len - 1;
+  STRLEN len  = SvCUR(sv);
+  char *str = SvPVX(sv);
+  char *end;
+
+  if ( len == 0 )
+    return newSVpvn_flags( str, 0, SvUTF8(sv) );
+
+  end = str + len - 1;
 
   // Skip whitespace at front...
-  while ( IS_SPACE( (unsigned char) *str) ) {
+  while ( len > 0 && IS_SPACE( (unsigned char) *str) ) {
     ++str;
     --len;
   }
 
   // Trim at end...
-  while (end > str && isspace( (unsigned char) *end) ) {
+  while (end > str && IS_SPACE( (unsigned char) *end) ) {
     end--;
     --len;
   }
