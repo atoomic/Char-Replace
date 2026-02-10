@@ -29,6 +29,21 @@
     (c) >= 0xE0 ? 3 : \
     (c) >= 0xC0 ? 2 : 1 )
 
+/*
+ * ENSURE_ROOM: grow the reply SV's buffer so that at least need_bytes
+ * more bytes can be written at ix_newstr.  Doubles str_size until it
+ * fits, then refreshes the str pointer after SvGROW.
+ */
+#define ENSURE_ROOM(reply, str, str_size, ix_newstr, need_bytes) \
+  do { \
+    if ( (str_size) <= ((ix_newstr) + (need_bytes) + 1) ) { \
+      while ( (str_size) <= ((ix_newstr) + (need_bytes) + 1) ) \
+        (str_size) *= 2; \
+      SvGROW( (reply), (str_size) ); \
+      (str) = SvPVX(reply); \
+    } \
+  } while (0)
+
 SV *_replace_str( pTHX_ SV *sv, SV *map );
 SV *_trim_sv( pTHX_ SV *sv );
 IV _replace_inplace( pTHX_ SV *sv, SV *map );
@@ -270,12 +285,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
       if ( i + seq_len > len ) seq_len = len - i;
 
       /* ensure buffer has room */
-      if ( str_size <= (ix_newstr + seq_len + 1) ) {
-        while ( str_size <= (ix_newstr + seq_len + 1) )
-          str_size *= 2;
-        SvGROW( reply, str_size );
-        str = SvPVX(reply);
-      }
+      ENSURE_ROOM(reply, str, str_size, ix_newstr, seq_len);
 
       /* copy the entire multi-byte sequence */
       str[ix_newstr] = (char) c;
@@ -305,14 +315,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
         } else {
           STRLEN j;
 
-          /* Check if we need to expand. */
-          if (str_size <= (ix_newstr + slen + 1) ) { /* +1 for \0 */
-            while (str_size <= (ix_newstr + slen + 1)) {
-              str_size *= 2;
-            }
-            SvGROW( reply, str_size );
-            str = SvPVX(reply);
-          }
+          ENSURE_ROOM(reply, str, str_size, ix_newstr, slen);
 
           /* replace all characters except the last one, which avoids us to do a --ix_newstr after */
           for ( j = 0 ; j < slen - 1; ++j ) {
@@ -376,12 +379,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
             } else {
               STRLEN j;
 
-              if ( str_size <= (ix_newstr + slen + 1) ) {
-                while ( str_size <= (ix_newstr + slen + 1) )
-                  str_size *= 2;
-                SvGROW( reply, str_size );
-                str = SvPVX(reply);
-              }
+              ENSURE_ROOM(reply, str, str_size, ix_newstr, slen);
 
               for ( j = 0; j < slen - 1; ++j )
                 str[ix_newstr++] = replace[j];
