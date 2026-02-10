@@ -4,7 +4,7 @@ Char::Replace - Perl naive XS character replacement as an alternate to substitut
 
 # VERSION
 
-version 0.006
+version 0.007
 
 # SYNOPSIS
 
@@ -29,7 +29,7 @@ our ( $STR, @MAP );
 
     the map should be read as replace the characters X
     by the string stored at $MAP[ ord('X') ]
-
+  
  Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1) or a string
  at this time any other value is not handled: IVs, NVs, ...
 
@@ -59,7 +59,14 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
 { # trim XS helper
     # remove spaces at the beginning and end of a string - XS helper
 
-    is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];
+    is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];    
+}
+
+{ # trim_inplace: modify string in place (zero allocation)
+    my $str = qq[  Some spaces  \n];
+    my $removed = Char::Replace::trim_inplace( $str );
+    is $str, q[Some spaces], "trim_inplace modifies in place";
+    is $removed, 5, "5 whitespace bytes removed";
 }
 
 done_testing;
@@ -72,16 +79,51 @@ Char::Replace
 XS helpers to perform some basic character replacement on strings.
 
 - replace: replace (transliterate) one or more ASCII characters
+- replace\_inplace: fast in-place 1:1 character replacement (no allocation)
 - trim: remove leading and trailing spaces of a string
+- trim\_inplace: in-place whitespace trimming (no allocation)
 
 # Available functions
 
 ## $output = replace( $string, $MAP )
 
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
-Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid
+Map entries can be:
+
+- a string (PV) — replaces the character with that string
+- an empty string — deletes the character from the output
+- an integer (IV) — replaces the character with `chr(value)` (0–255)
+- undef — keeps the original character unchanged
+- a code ref — called with the character as argument; return value is the replacement
+(return undef to keep original, empty string to delete)
 
 view ["SYNOPSIS"](#synopsis) or example just after.
+
+Setting a map entry to an empty string deletes the character from the output:
+
+```
+$map->[ ord('x') ] = q[];    # delete 'x'
+Char::Replace::replace( "fox", $map ) eq "fo" or die;
+```
+
+Setting a map entry to an integer replaces the character with chr(value):
+
+```
+$map->[ ord('a') ] = ord('A');  # replace 'a' with 'A'
+Char::Replace::replace( "abc", $map ) eq "Abc" or die;
+```
+
+Setting a map entry to a code ref enables dynamic replacement:
+
+```perl
+$map->[ ord('a') ] = sub { uc $_[0] };  # uppercase callback
+Char::Replace::replace( "abc", $map ) eq "Abc" or die;
+
+# stateful callback
+my $n = 0;
+$map->[ ord('x') ] = sub { ++$n };
+Char::Replace::replace( "xyx", $map ) eq "1y2" or die;
+```
 
 ## $map = identity\_map()
 
@@ -98,6 +140,54 @@ $map->[ ord('a') ] = q[XYZ]; # replace 'a' by 'XYZ'
 Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
 ```
 
+## $map = build\_map( char => replacement, ... )
+
+Convenience constructor: takes a hash of single-character keys and their
+replacement values, and returns an array ref suitable for `replace()` or
+`replace_inplace()`. Starts from an identity map, so unmapped characters
+pass through unchanged.
+
+```perl
+my $map = Char::Replace::build_map(
+    'a' => 'AA',
+    'd' => '',       # delete
+    'x' => ord('X'), # IV
+    'z' => sub { uc $_[0] },  # callback
+);
+Char::Replace::replace( "abxd", $map ) eq "AAbX" or die;
+```
+
+Croaks if any key is not exactly one character.
+
+## $count = replace\_inplace( $string, $MAP )
+
+Modifies `$string` in place, applying 1:1 byte replacements from `$MAP`.
+Returns the number of bytes actually changed.
+
+Unlike `replace()`, this function does **not** allocate a new string — it
+modifies the existing SV buffer directly. This makes it significantly faster
+(up to 3.5x for long strings) but restricts map entries to single-character
+replacements only:
+
+- a single-character string (PV of length 1)
+- an integer (IV) in range 0–255
+- undef — keeps the original character unchanged
+
+Multi-character strings, empty strings (deletion), and code refs will cause a croak.
+Use `replace()` when you need expansion, deletion, or dynamic callbacks.
+
+```perl
+my $map = Char::Replace::identity_map();
+$map->[ ord('a') ] = 'A';
+
+my $str = "abcabc";
+my $n = Char::Replace::replace_inplace( $str, $map );
+# $str is now "AbcAbc", $n is 2
+```
+
+UTF-8 safety applies: multi-byte sequences are skipped, only ASCII bytes
+are eligible for replacement.
+
 ## $string = trim( $string )
 
 trim removes all trailing and leading characters of a string
@@ -108,6 +198,26 @@ The removal is performed in XS.
 We only need to look at the beginning and end of the string.
 
 The UTF-8 state of a string is preserved.
+
+## $count = trim\_inplace( $string )
+
+Modifies `$string` in place, removing leading and trailing whitespace.
+Returns the total number of whitespace bytes removed.
+
+Unlike `trim()`, this function does **not** allocate a new string — it
+modifies the existing SV directly. Uses `sv_chop()` internally for
+efficient leading-whitespace removal.
+
+The same whitespace characters as `trim()` are recognized:
+`' '`, `'\r'`, `'\n'`, `'\t'`, `'\f'`.
+
+```perl
+my $str = "  hello world  ";
+my $n = Char::Replace::trim_inplace( $str );
+# $str is now "hello world", $n is 4
+```
+
+The UTF-8 state of the string is preserved.
 
 # Benchmarks
 
@@ -132,11 +242,11 @@ our ( $STR, @MAP );
 
     # just a sample latin text
     my $latin = <<'EOS';
-Lorem ipsum dolor sit amet, accumsan patrioque mel ei.
-Sumo temporibus ad vix, in veri urbanitas pri, rebum
-nusquam expetendis et eum. Et movet antiopam eum,
-an veri quas pertinax mea. Te pri propriae consequuntur,
-te solum aeque albucius ius.
+Lorem ipsum dolor sit amet, accumsan patrioque mel ei. 
+Sumo temporibus ad vix, in veri urbanitas pri, rebum 
+nusquam expetendis et eum. Et movet antiopam eum, 
+an veri quas pertinax mea. Te pri propriae consequuntur, 
+te solum aeque albucius ius. 
 Ubique everti recusabo id sea, adhuc vitae quo ea.
 EOS
 
@@ -202,7 +312,7 @@ replace_xs      431960/s           5862%            102%              --
                 my $str = $STR;
                 $str =~ s/(.)/$MAP[ord($1)]/og;
                 return $str;
-            },
+            },            
         };
 
         # sanity check
@@ -277,11 +387,11 @@ our ($STR);
 
     # just a sample latin text
     my $latin = <<'EOS';
-Lorem ipsum dolor sit amet, accumsan patrioque mel ei.
-Sumo temporibus ad vix, in veri urbanitas pri, rebum
-nusquam expetendis et eum. Et movet antiopam eum,
-an veri quas pertinax mea. Te pri propriae consequuntur,
-te solum aeque albucius ius.
+Lorem ipsum dolor sit amet, accumsan patrioque mel ei. 
+Sumo temporibus ad vix, in veri urbanitas pri, rebum 
+nusquam expetendis et eum. Et movet antiopam eum, 
+an veri quas pertinax mea. Te pri propriae consequuntur, 
+te solum aeque albucius ius. 
 Ubique everti recusabo id sea, adhuc vitae quo ea.
 EOS
 
@@ -433,14 +543,14 @@ pp_naive_trim   19610/s           59%            --          -99%
 xs_trim       1810099/s        14556%         9130%            --
 ```
 
-# TODO
-
-- handle IV in the map (at this time only PV are expected)
-
 # Warnings
 
 Be aware, that this software is still in a very alpha state at this stage.
-Use it as it, patches are welcome.
+Use it as it, patches are welcome. 
+
+# Todo
+
+- handle IV in the map (at this time only PV are expected)
 
 # LICENSE
 
