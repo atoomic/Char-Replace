@@ -12,6 +12,19 @@ use warnings;
 
 # ABSTRACT: Perl naive XS character replacement as an alternate to substitute or transliterate
 
+use Exporter 'import';
+
+our @EXPORT_OK = qw(
+    replace
+    replace_inplace
+    trim
+    trim_inplace
+    identity_map
+    build_map
+    compile_map
+);
+
+our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 BEGIN {
 
@@ -49,6 +62,14 @@ Char::Replace sample usage
 Char::Replace
 
 XS helpers to perform some basic character replacement on strings.
+
+All functions can be called fully-qualified (C<Char::Replace::replace(...)>) or
+imported individually or as a group:
+
+    use Char::Replace qw(replace trim);        # import specific functions
+    use Char::Replace ':all';                   # import everything
+
+Nothing is exported by default.
 
 =over
 
