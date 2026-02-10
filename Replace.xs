@@ -14,7 +14,7 @@
 #include <XSUB.h>
 #include <embed.h>
 
-#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f')
+#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
 /*
  * UTF8_SEQ_LEN: given a lead byte c (>= 0x80), return the expected
