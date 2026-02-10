@@ -53,7 +53,7 @@ SV *_replace_str( SV *sv, SV *map ) {
   char *src;
   STRLEN        i = 0;
   char     *ptr;
-  char           *str;                      /* the new string we are going to use */
+  char           *str;                      /* pointer into reply SV's buffer */
   STRLEN      str_size;                     /* start with input length + some padding */
   STRLEN   ix_newstr = 0;
   AV           *mapav;
@@ -77,8 +77,13 @@ SV *_replace_str( SV *sv, SV *map ) {
   map_top = AvFILL(mapav);
   is_utf8 = SvUTF8(sv) ? 1 : 0;
 
-  /* Always allocate memory using Perl's memory management */
-  Newx(str, str_size, char);
+  /*
+   * Allocate the reply SV up front and write directly into its buffer.
+   * This avoids Newx + newSVpvn_flags + Safefree (one alloc + copy saved).
+   */
+  reply = newSV( str_size );
+  SvPOK_on(reply);
+  str = SvPVX(reply);
 
   for ( i = 0; i < len; ++i, ++ptr, ++ix_newstr ) {
     unsigned char c = (unsigned char) *ptr;
@@ -107,7 +112,8 @@ SV *_replace_str( SV *sv, SV *map ) {
       if ( str_size <= (ix_newstr + seq_len + 1) ) {
         while ( str_size <= (ix_newstr + seq_len + 1) )
           str_size *= 2;
-        Renew( str, str_size, char );
+        SvGROW( reply, str_size );
+        str = SvPVX(reply);
       }
 
       /* copy the entire multi-byte sequence */
@@ -140,12 +146,11 @@ SV *_replace_str( SV *sv, SV *map ) {
 
           /* Check if we need to expand. */
           if (str_size <= (ix_newstr + slen + 1) ) { /* +1 for \0 */
-            /* Calculate the required size, ensuring it's enough */
             while (str_size <= (ix_newstr + slen + 1)) {
               str_size *= 2;
             }
-            /* grow the string */
-            Renew( str, str_size, char );
+            SvGROW( reply, str_size );
+            str = SvPVX(reply);
           }
 
           /* replace all characters except the last one, which avoids us to do a --ix_newstr after */
@@ -167,12 +172,10 @@ SV *_replace_str( SV *sv, SV *map ) {
     } /* end - map_top || AvARRAY */
   }
 
-  str[ix_newstr] = '\0'; /* add the final trailing \0 character */
-
-  reply = newSVpvn_flags( str, ix_newstr, SvUTF8(sv) );
-
-  /* free our tmp buffer */
-  Safefree(str);
+  str[ix_newstr] = '\0';
+  SvCUR_set(reply, ix_newstr);
+  if ( SvUTF8(sv) )
+    SvUTF8_on(reply);
 
   return reply;
 }
