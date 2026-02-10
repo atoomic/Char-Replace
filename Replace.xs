@@ -587,3 +587,22 @@ CODE:
   }
 OUTPUT:
   RETVAL
+
+SV*
+identity_map()
+CODE:
+{
+  AV *av = newAV();
+  int i;
+  char buf[2];
+
+  av_extend(av, 255);
+  buf[1] = '\0';
+  for ( i = 0; i <= 255; ++i ) {
+    buf[0] = (char) i;
+    av_store( av, i, newSVpvn( buf, 1 ) );
+  }
+  RETVAL = newRV_noinc( (SV *) av );
+}
+OUTPUT:
+  RETVAL
