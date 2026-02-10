@@ -358,6 +358,9 @@ SV *_replace_str( SV *sv, SV *map ) {
         arg = sv_2mortal( newSVpvn( ch_buf, 1 ) );
         if ( is_utf8 )
           SvUTF8_on( arg );
+        /* Propagate taint from source to callback argument */
+        if ( SvTAINTED(sv) )
+          SvTAINTED_on( arg );
 
         ENTER;
         SAVETMPS;
@@ -386,6 +389,7 @@ SV *_replace_str( SV *sv, SV *map ) {
           if ( SvOK( result ) ) {
             STRLEN slen;
             char *replace = SvPV( result, slen );
+            /* SvPV guaranteed non-NULL for valid SV; SvOK check above ensures valid SV */
 
             if ( slen == 0 ) {
               --ix_newstr;

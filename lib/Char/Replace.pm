@@ -88,6 +88,11 @@ Map entries can be:
 =item a code ref — called with the character as argument; return value is the replacement
 (return undef to keep original, empty string to delete)
 
+B<Note:> Code ref callbacks are significantly slower than static replacements due to
+function call overhead. Avoid heavy computation inside callbacks. Callbacks receive
+a single-character string argument; for tainted input, the output string inherits the
+taint flag from the input (not from the callback return value).
+
 =back
 
 view L</SYNOPSIS> or example just after.
@@ -114,7 +119,7 @@ Setting a map entry to a code ref enables dynamic replacement:
 
 =head2 $map = identity_map()
 
-This is a convenient helper to initializee an ASCII mapping.
+This is a convenient helper to initialize an ASCII mapping.
 It returns an Array Ref, where every character will map to itself by default.
 
 You can then adjust one or several characters.
