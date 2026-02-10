@@ -29,7 +29,12 @@
     (c) >= 0xC0 ? 2 : 1 )
 
 #define IS_CODEREF(sv) (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV)
-#define PROPAGATE_TAINT(from, to) do { if (SvTAINTED(from)) SvTAINTED_on(to); } while (0)
+#define PROPAGATE_TAINT(from, to) do { if (PL_tainting && SvTAINTED(from)) SvTAINTED_on(to); } while (0)
+
+/* croak_sv was introduced in Perl 5.18; provide fallback for older versions */
+#if PERL_VERSION < 18
+#define croak_sv(sv) croak("%s", SvPV_nolen(sv))
+#endif
 
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
@@ -359,7 +364,7 @@ SV *_replace_str( SV *sv, SV *map ) {
         if ( is_utf8 )
           SvUTF8_on( arg );
         /* Propagate taint from source to callback argument */
-        if ( SvTAINTED(sv) )
+        if ( PL_tainting && SvTAINTED(sv) )
           SvTAINTED_on( arg );
 
         ENTER;
