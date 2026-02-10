@@ -31,6 +31,7 @@
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 IV _replace_inplace( SV *sv, SV *map );
+IV _trim_inplace( SV *sv );
 
 /*
  * _build_fast_map: populate a 256-byte identity lookup table, then
@@ -98,6 +99,58 @@ SV *_trim_sv( SV *sv ) {
   }
 
   return newSVpvn_flags( str, len, SvUTF8(sv) );
+}
+
+/*
+ * _trim_inplace: remove leading and trailing whitespace from an SV
+ * in place (no allocation).
+ *
+ * Returns the total number of whitespace bytes removed.
+ * Uses sv_chop() to advance past leading whitespace efficiently,
+ * and adjusts SvCUR for trailing whitespace.
+ */
+IV _trim_inplace( SV *sv ) {
+  dTHX;
+  STRLEN len;
+  char *str;
+  char *end;
+  STRLEN lead = 0;
+  STRLEN trail = 0;
+
+  SvPV_force_nolen(sv);
+  str = SvPVX(sv);
+  len = SvCUR(sv);
+
+  if ( len == 0 )
+    return 0;
+
+  end = str + len - 1;
+
+  /* count and skip leading whitespace */
+  while ( lead < len && IS_SPACE( (unsigned char) str[lead] ) )
+    ++lead;
+
+  /* count trailing whitespace (don't go past the leading trim point) */
+  while ( end > (str + lead) && IS_SPACE( (unsigned char) *end ) ) {
+    --end;
+    ++trail;
+  }
+
+  if ( lead == 0 && trail == 0 )
+    return 0;
+
+  /* trim trailing first (just shorten the string) */
+  if ( trail ) {
+    SvCUR_set(sv, len - trail);
+    SvPVX(sv)[len - trail] = '\0';
+  }
+
+  /* trim leading via sv_chop (adjusts PVX pointer + OOK offset) */
+  if ( lead )
+    sv_chop(sv, SvPVX(sv) + lead);
+
+  SvSETMAGIC(sv);
+  return (IV)(lead + trail);
 }
 
 
@@ -437,6 +490,18 @@ replace_inplace(sv, map)
 CODE:
   if ( sv && SvPOK(sv) ) {
      RETVAL = _replace_inplace( sv, map );
+  } else {
+     RETVAL = 0;
+  }
+OUTPUT:
+  RETVAL
+
+IV
+trim_inplace(sv)
+  SV *sv;
+CODE:
+  if ( sv && SvPOK(sv) ) {
+     RETVAL = _trim_inplace( sv );
   } else {
      RETVAL = 0;
   }
