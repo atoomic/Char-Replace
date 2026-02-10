@@ -28,10 +28,40 @@
     (c) >= 0xE0 ? 3 : \
     (c) >= 0xC0 ? 2 : 1 )
 
+#define IS_CODEREF(sv) (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV)
+#define PROPAGATE_TAINT(from, to) do { if (SvTAINTED(from)) SvTAINTED_on(to); } while (0)
+
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 IV _replace_inplace( SV *sv, SV *map );
 IV _trim_inplace( SV *sv );
+
+/*
+ * ensure_buffer_space: grow the buffer if needed to accommodate additional bytes.
+ * Returns the updated string pointer (SvGROW may relocate).
+ */
+static inline char *ensure_buffer_space(SV *sv, STRLEN *str_size, STRLEN needed) {
+  if (*str_size <= needed) {
+    while (*str_size <= needed) {
+      *str_size *= 2;
+    }
+    SvGROW(sv, *str_size);
+  }
+  return SvPVX(sv);
+}
+
+/*
+ * copy_replacement: copy replacement string into buffer, handling multi-char replacements.
+ * Returns the new buffer position.
+ */
+static inline STRLEN copy_replacement(char *str, STRLEN ix, const char *replace, STRLEN slen) {
+  STRLEN j;
+  for (j = 0; j < slen - 1; ++j) {
+    str[ix++] = replace[j];
+  }
+  str[ix] = replace[j];
+  return ix;
+}
 
 /*
  * _build_fast_map: populate a 256-byte identity lookup table, then
@@ -71,7 +101,7 @@ static int _build_fast_map( char fast_map[256], SV **ary, SSize_t map_top ) {
       /* out-of-range: keep identity (already set) */
     }
     /* code ref: not eligible for fast path */
-    else if ( SvROK( entry ) && SvTYPE( SvRV( entry ) ) == SVt_PVCV ) {
+    else if ( IS_CODEREF( entry ) ) {
       return 0;
     }
     /* undef/other: identity (already set) */
@@ -88,7 +118,7 @@ SV *_trim_sv( SV *sv ) {
 
   if ( len == 0 ) {
     reply = newSVpvn_flags( str, 0, SvUTF8(sv) );
-    if ( SvTAINTED(sv) ) SvTAINTED_on(reply);
+    PROPAGATE_TAINT(sv, reply);
     return reply;
   }
 
@@ -107,7 +137,7 @@ SV *_trim_sv( SV *sv ) {
   }
 
   reply = newSVpvn_flags( str, len, SvUTF8(sv) );
-  if ( SvTAINTED(sv) ) SvTAINTED_on(reply);
+  PROPAGATE_TAINT(sv, reply);
   return reply;
 }
 
@@ -182,8 +212,8 @@ SV *_replace_str( SV *sv, SV *map ) {
     || AvFILL( SvRV(map) ) < 0
     ) {
       src = SvPV(sv, len);
-      reply = newSVpvn_flags( src, len, SvUTF8(sv) ); /* no alteration */
-      if ( SvTAINTED(sv) ) SvTAINTED_on(reply);
+      reply = newSVpvn_flags( src, len, SvUTF8(sv) );
+      PROPAGATE_TAINT(sv, reply);
       return reply;
   }
 
@@ -240,8 +270,7 @@ SV *_replace_str( SV *sv, SV *map ) {
 
       if ( SvUTF8(sv) )
         SvUTF8_on(reply);
-      if ( SvTAINTED(sv) )
-        SvTAINTED_on(reply);
+      PROPAGATE_TAINT(sv, reply);
       return reply;
     }
   }
@@ -303,27 +332,11 @@ SV *_replace_str( SV *sv, SV *map ) {
         STRLEN slen;
         char *replace = SvPV( entry, slen ); /* length of the string used for replacement */
         if ( slen == 0  ) {
-          --ix_newstr; /* undo the default write: delete the character */
+          --ix_newstr;
           continue;
         } else {
-          STRLEN j;
-
-          /* Check if we need to expand. */
-          if (str_size <= (ix_newstr + slen + 1) ) { /* +1 for \0 */
-            while (str_size <= (ix_newstr + slen + 1)) {
-              str_size *= 2;
-            }
-            SvGROW( reply, str_size );
-            str = SvPVX(reply);
-          }
-
-          /* replace all characters except the last one, which avoids us to do a --ix_newstr after */
-          for ( j = 0 ; j < slen - 1; ++j ) {
-            str[ix_newstr++] = replace[j];
-          }
-
-          /* handle the last character */
-          str[ix_newstr] = replace[j];
+          str = ensure_buffer_space(reply, &str_size, ix_newstr + slen + 1);
+          ix_newstr = copy_replacement(str, ix_newstr, replace, slen);
         }
       } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
         /* IV/NV support: treat the integer value as an ordinal (chr) */
@@ -332,7 +345,7 @@ SV *_replace_str( SV *sv, SV *map ) {
           str[ix_newstr] = (char) val;
         }
         /* out-of-range values: keep original character (already written) */
-      } else if ( SvROK( entry ) && SvTYPE( SvRV( entry ) ) == SVt_PVCV ) {
+      } else if ( IS_CODEREF( entry ) ) {
         /* Code ref: call the sub with the character as argument */
         dSP;
         SV *arg;
@@ -375,20 +388,10 @@ SV *_replace_str( SV *sv, SV *map ) {
             char *replace = SvPV( result, slen );
 
             if ( slen == 0 ) {
-              --ix_newstr; /* delete the character */
+              --ix_newstr;
             } else {
-              STRLEN j;
-
-              if ( str_size <= (ix_newstr + slen + 1) ) {
-                while ( str_size <= (ix_newstr + slen + 1) )
-                  str_size *= 2;
-                SvGROW( reply, str_size );
-                str = SvPVX(reply);
-              }
-
-              for ( j = 0; j < slen - 1; ++j )
-                str[ix_newstr++] = replace[j];
-              str[ix_newstr] = replace[j];
+              str = ensure_buffer_space(reply, &str_size, ix_newstr + slen + 1);
+              ix_newstr = copy_replacement(str, ix_newstr, replace, slen);
             }
           }
           /* undef result: keep original (already written) */
@@ -405,8 +408,7 @@ SV *_replace_str( SV *sv, SV *map ) {
   SvCUR_set(reply, ix_newstr);
   if ( SvUTF8(sv) )
     SvUTF8_on(reply);
-  if ( SvTAINTED(sv) )
-    SvTAINTED_on(reply);
+  PROPAGATE_TAINT(sv, reply);
 
   return reply;
 }
@@ -528,7 +530,7 @@ IV _replace_inplace( SV *sv, SV *map ) {
           }
         }
         /* out-of-range: keep original */
-      } else if ( SvROK( entry ) && SvTYPE( SvRV( entry ) ) == SVt_PVCV ) {
+      } else if ( IS_CODEREF( entry ) ) {
         croak("replace_inplace: map entry for byte %d is a code ref"
               " (not supported for in-place replacement; use replace() instead)", ix);
       }
