@@ -6,6 +6,7 @@ Revision history for Char-Replace
   — callback receives the character, return value becomes the replacement
   — return undef to keep original, empty string to delete
   — replace_inplace() croaks on code ref entries (use replace() instead)
+  — safe for re-entrant/recursive use (callback can call replace())
 - Fix: memory leak when a code ref callback dies during replace()
   (reply SV was not freed on exception; now uses G_EVAL + croak_sv)
 - Fix taint propagation: replace() and trim() now correctly propagate the
@@ -25,7 +26,11 @@ Revision history for Char-Replace
 - Perf: precomputed 256-byte lookup table fast path for 1:1 maps in both
   replace() and replace_inplace() — eliminates per-byte SV type dispatch;
   replace() on long strings is now faster than Perl's tr///
+- Perf: use pTHX_ calling convention with PERL_NO_GET_CONTEXT to eliminate
+  redundant thread-local storage lookups on threaded perls
 - Refactor: extract UTF8_SEQ_LEN macro for shared UTF-8 byte handling
+- Refactor: extract ENSURE_ROOM macro for buffer growth (DRY)
+- Build: add PROTOTYPES: DISABLE to silence xsubpp warning
 
 0.006     2025-11-21 16:07:16-07:00 America/Denver
 
