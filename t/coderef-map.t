@@ -207,4 +207,17 @@ use Char::Replace;
     pass q[1000 die-in-callback iterations: no crash or corruption];
 }
 
+{
+    note "re-entrant: code ref calling replace() recursively";
+    my @map = @{ Char::Replace::identity_map() };
+    $map[ ord('a') ] = sub {
+        my @inner = @{ Char::Replace::identity_map() };
+        $inner[ ord('x') ] = 'Y';
+        return Char::Replace::replace( "x", \@inner );
+    };
+
+    is Char::Replace::replace( "abc", \@map ), "Ybc",
+        q[re-entrant: callback calls replace() safely];
+}
+
 done_testing;
