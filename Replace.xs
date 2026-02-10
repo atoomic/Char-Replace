@@ -61,7 +61,7 @@ SV *_replace_str( SV *sv, SV *map ) {
   int           is_utf8;                    /* whether the input string is UTF-8 */
 
   if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
-    || AvFILL( SvRV(map) ) <= 0
+    || AvFILL( SvRV(map) ) < 0
     ) {
       src = SvPV(sv, len);
       return newSVpvn_flags( src, len, SvUTF8(sv) ); /* no alteration */
@@ -155,7 +155,14 @@ SV *_replace_str( SV *sv, SV *map ) {
           /* handle the last character */
           str[ix_newstr] = replace[j];
         }
-      } /* end - SvPOK */
+      } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
+        /* IV/NV support: treat the integer value as an ordinal (chr) */
+        IV val = SvIV( entry );
+        if ( val >= 0 && val <= 255 ) {
+          str[ix_newstr] = (char) val;
+        }
+        /* out-of-range values: keep original character (already written) */
+      } /* end - SvPOK / SvIOK / SvNOK */
     } /* end - map_top || AvARRAY */
   }
 

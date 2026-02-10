@@ -58,13 +58,21 @@ XS helpers to perform some basic character replacement on strings.
 =head2 $output = replace( $string, $MAP )
 
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
-Map entries can be a string (replacement), an empty string (deletion), or undef (no change).
-Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid.
+Map entries can be:
 
-When the input string has the UTF-8 flag set, only ASCII bytes (0x00-0x7F) are
-eligible for replacement. Multi-byte UTF-8 sequences are copied through unchanged,
-preventing corruption of wide characters whose internal bytes might collide with
-map entries.
+=over
+
+=item a string (PV) — replaces the character with that string
+
+=item an empty string — deletes the character from the output
+
+=item an integer (IV) — replaces the character with C<chr(value)> (0–255)
+
+=item undef — keeps the original character unchanged
+
+=back
+
+Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid.
 
 view L</SYNOPSIS> or example just after.
 
@@ -72,6 +80,11 @@ Setting a map entry to an empty string deletes the character from the output:
 
     $map->[ ord('x') ] = q[];    # delete 'x'
     Char::Replace::replace( "fox", $map ) eq "fo" or die;
+
+Setting a map entry to an integer replaces the character with chr(value):
+
+    $map->[ ord('a') ] = ord('A');  # replace 'a' with 'A'
+    Char::Replace::replace( "abc", $map ) eq "Abc" or die;
 
 =head2 $map = identity_map()
 
@@ -108,13 +121,6 @@ The UTF-8 state of a string is preserved.
 # EXAMPLE: examples/benchmark-trim.pl
 
 
-=head1 TODO
-
-=over
-
-=item handle IV in the map (at this time only PV are expected)
-
-=back
 
 =head1 Warnings
 
