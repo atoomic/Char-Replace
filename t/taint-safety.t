@@ -138,4 +138,35 @@ sub fresh_map { @{ Char::Replace::identity_map() } }
     ok tainted($r), q[replace: taint preserved with code ref entry];
 }
 
+{
+    note "replace(): callback receives tainted argument";
+
+    my @map = fresh_map();
+    my $arg_was_tainted;
+    $map[ ord('a') ] = sub { 
+        $arg_was_tainted = tainted($_[0]);
+        return uc $_[0];
+    };
+
+    my $t = taint("abcd");
+    my $r = Char::Replace::replace($t, \@map);
+    ok $arg_was_tainted, q[callback argument inherits taint from source];
+    ok tainted($r), q[result is also tainted];
+}
+
+{
+    note "replace(): callback with untainted input receives untainted argument";
+
+    my @map = fresh_map();
+    my $arg_was_tainted;
+    $map[ ord('a') ] = sub { 
+        $arg_was_tainted = tainted($_[0]);
+        return uc $_[0];
+    };
+
+    my $r = Char::Replace::replace("abcd", \@map);
+    ok !$arg_was_tainted, q[callback argument is clean for clean input];
+    ok !tainted($r), q[result is also clean];
+}
+
 done_testing;
