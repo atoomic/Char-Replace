@@ -226,6 +226,14 @@ Use C<replace()> when you need expansion, deletion, or dynamic callbacks.
 UTF-8 safety applies: multi-byte sequences are skipped, only ASCII bytes
 are eligible for replacement.
 
+B<Performance note>: C<replace_inplace()> avoids memory allocation, making it
+ideal for memory-constrained environments or when modifying a string that is
+already in a variable. However, due to CPU cache effects (reading and writing
+the same memory region), it is not necessarily faster than C<replace()> for
+raw throughput — the allocating variant writes to a separate buffer, which
+modern CPUs pipeline more efficiently. Prefer C<replace_inplace()> when you
+want to avoid allocation overhead, not when you need maximum speed.
+
 =head2 $string = trim( $string )
 
 trim removes all trailing and leading characters of a string
