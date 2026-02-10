@@ -31,6 +31,49 @@
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 IV _replace_inplace( SV *sv, SV *map );
+IV _trim_inplace( SV *sv );
+
+/*
+ * _build_fast_map: populate a 256-byte identity lookup table, then
+ * overwrite entries according to the Perl map array.
+ *
+ * Returns 1 if every map entry is a 1:1 byte replacement (fast-path
+ * eligible).  Returns 0 if any entry requires expansion, deletion,
+ * or is otherwise incompatible — the caller should fall through to
+ * the general path.
+ */
+static int _build_fast_map( char fast_map[256], SV **ary, SSize_t map_top ) {
+  dTHX;
+  int ix;
+  SSize_t scan_top = map_top < 255 ? map_top : 255;
+
+  for ( ix = 0; ix < 256; ++ix )
+    fast_map[ix] = (char) ix;
+
+  for ( ix = 0; ix <= scan_top; ++ix ) {
+    SV *entry;
+    if ( !ary[ix] )
+      continue;
+    entry = ary[ix];
+    if ( SvPOK( entry ) ) {
+      STRLEN slen;
+      char *pv = SvPV( entry, slen );
+      if ( slen == 1 ) {
+        fast_map[ix] = pv[0];
+      } else {
+        return 0;
+      }
+    } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
+      IV val = SvIV( entry );
+      if ( val >= 0 && val <= 255 ) {
+        fast_map[ix] = (char) val;
+      }
+      /* out-of-range: keep identity (already set) */
+    }
+    /* undef/other: identity (already set) */
+  }
+  return 1;
+}
 
 SV *_trim_sv( SV *sv ) {
   dTHX;
@@ -56,6 +99,58 @@ SV *_trim_sv( SV *sv ) {
   }
 
   return newSVpvn_flags( str, len, SvUTF8(sv) );
+}
+
+/*
+ * _trim_inplace: remove leading and trailing whitespace from an SV
+ * in place (no allocation).
+ *
+ * Returns the total number of whitespace bytes removed.
+ * Uses sv_chop() to advance past leading whitespace efficiently,
+ * and adjusts SvCUR for trailing whitespace.
+ */
+IV _trim_inplace( SV *sv ) {
+  dTHX;
+  STRLEN len;
+  char *str;
+  char *end;
+  STRLEN lead = 0;
+  STRLEN trail = 0;
+
+  SvPV_force_nolen(sv);
+  str = SvPVX(sv);
+  len = SvCUR(sv);
+
+  if ( len == 0 )
+    return 0;
+
+  end = str + len - 1;
+
+  /* count and skip leading whitespace */
+  while ( lead < len && IS_SPACE( (unsigned char) str[lead] ) )
+    ++lead;
+
+  /* count trailing whitespace (don't go past the leading trim point) */
+  while ( end > (str + lead) && IS_SPACE( (unsigned char) *end ) ) {
+    --end;
+    ++trail;
+  }
+
+  if ( lead == 0 && trail == 0 )
+    return 0;
+
+  /* trim trailing first (just shorten the string) */
+  if ( trail ) {
+    SvCUR_set(sv, len - trail);
+    SvPVX(sv)[len - trail] = '\0';
+  }
+
+  /* trim leading via sv_chop (adjusts PVX pointer + OOK offset) */
+  if ( lead )
+    sv_chop(sv, SvPVX(sv) + lead);
+
+  SvSETMAGIC(sv);
+  return (IV)(lead + trail);
 }
 
 
@@ -88,6 +183,55 @@ SV *_replace_str( SV *sv, SV *map ) {
   SV **ary = AvARRAY(mapav);
   map_top = AvFILL(mapav);
   is_utf8 = SvUTF8(sv) ? 1 : 0;
+
+  /*
+   * Fast path: when every map entry is a 1:1 byte replacement (single-char
+   * PV, IV 0-255, or identity), we precompute a 256-byte lookup table and
+   * avoid per-byte SV type dispatch entirely.
+   */
+  {
+    char fast_map[256];
+
+    if ( _build_fast_map( fast_map, ary, map_top ) ) {
+      reply = newSV( len + 1 );
+      SvPOK_on(reply);
+      str = SvPVX(reply);
+
+      if ( !is_utf8 ) {
+        /* tight loop: no SV dispatch, no UTF-8 checks */
+        for ( i = 0; i < len; ++i )
+          str[i] = fast_map[(unsigned char) src[i]];
+
+        str[len] = '\0';
+        SvCUR_set(reply, len);
+      } else {
+        /* UTF-8 aware fast path: use table for ASCII, copy multi-byte sequences */
+        STRLEN out = 0;
+        for ( i = 0; i < len; ++i, ++out ) {
+          unsigned char c = (unsigned char) src[i];
+          if ( c >= 0x80 ) {
+            STRLEN seq_len = UTF8_SEQ_LEN(c);
+            STRLEN k;
+            if ( i + seq_len > len ) seq_len = len - i;
+            for ( k = 0; k < seq_len; ++k )
+              str[out + k] = src[i + k];
+            i += seq_len - 1;    /* -1: loop increments */
+            out += seq_len - 1;  /* -1: loop increments */
+          } else {
+            str[out] = fast_map[c];
+          }
+        }
+
+        str[out] = '\0';
+        SvCUR_set(reply, out);
+      }
+
+      if ( SvUTF8(sv) )
+        SvUTF8_on(reply);
+      return reply;
+    }
+  }
+  /* end fast path — fall through to general path */
 
   /*
    * Allocate the reply SV up front and write directly into its buffer.
@@ -223,6 +367,48 @@ IV _replace_inplace( SV *sv, SV *map ) {
   map_top = AvFILL(mapav);
   is_utf8 = SvUTF8(sv) ? 1 : 0;
 
+  /*
+   * Fast path: precompute a 256-byte lookup table.
+   * Only valid when all map entries are 1:1 byte replacements.
+   * Croaks on multi-char/empty entries are deferred to the general path.
+   */
+  {
+    char fast_map[256];
+
+    if ( _build_fast_map( fast_map, ary, map_top ) ) {
+      if ( !is_utf8 ) {
+        for ( i = 0; i < len; ++i ) {
+          char replacement = fast_map[(unsigned char) str[i]];
+          if ( str[i] != replacement ) {
+            str[i] = replacement;
+            ++count;
+          }
+        }
+      } else {
+        for ( i = 0; i < len; ++i ) {
+          unsigned char c = (unsigned char) str[i];
+          if ( c >= 0x80 ) {
+            STRLEN seq_len = UTF8_SEQ_LEN(c);
+            if ( i + seq_len > len ) seq_len = len - i;
+            i += seq_len - 1;
+            continue;
+          }
+          {
+            char replacement = fast_map[c];
+            if ( str[i] != replacement ) {
+              str[i] = replacement;
+              ++count;
+            }
+          }
+        }
+      }
+      if ( count )
+        SvSETMAGIC(sv);
+      return count;
+    }
+  }
+  /* end fast path */
+
   for ( i = 0; i < len; ++i ) {
     unsigned char c = (unsigned char) str[i];
     int ix = (int) c;
@@ -265,7 +451,8 @@ IV _replace_inplace( SV *sv, SV *map ) {
     }
   }
 
-  SvSETMAGIC(sv);
+  if ( count )
+    SvSETMAGIC(sv);
   return count;
 }
 
@@ -303,6 +490,18 @@ replace_inplace(sv, map)
 CODE:
   if ( sv && SvPOK(sv) ) {
      RETVAL = _replace_inplace( sv, map );
+  } else {
+     RETVAL = 0;
+  }
+OUTPUT:
+  RETVAL
+
+IV
+trim_inplace(sv)
+  SV *sv;
+CODE:
+  if ( sv && SvPOK(sv) ) {
+     RETVAL = _trim_inplace( sv );
   } else {
      RETVAL = 0;
   }

@@ -64,6 +64,8 @@ XS helpers to perform some basic character replacement on strings.
 
 =item trim: remove leading and trailing spaces of a string
 
+=item trim_inplace: in-place whitespace trimming (no allocation)
+
 =back
 
 =head1 Available functions
@@ -171,6 +173,24 @@ The removal is performed in XS.
 We only need to look at the beginning and end of the string.
 
 The UTF-8 state of a string is preserved.
+
+=head2 $count = trim_inplace( $string )
+
+Modifies C<$string> in place, removing leading and trailing whitespace.
+Returns the total number of whitespace bytes removed.
+
+Unlike C<trim()>, this function does B<not> allocate a new string — it
+modifies the existing SV directly. Uses C<sv_chop()> internally for
+efficient leading-whitespace removal.
+
+The same whitespace characters as C<trim()> are recognized:
+C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>.
+
+    my $str = "  hello world  ";
+    my $n = Char::Replace::trim_inplace( $str );
+    # $str is now "hello world", $n is 4
+
+The UTF-8 state of the string is preserved.
 
 =head1 Benchmarks
 
