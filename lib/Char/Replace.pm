@@ -36,13 +36,13 @@ BEGIN {
 
 sub build_map {
     my (%pairs) = @_;
-    my $MAP = identity_map();
+    my @MAP;
     for my $from ( keys %pairs ) {
         length($from) == 1
             or do { require Carp; Carp::croak("build_map: key must be a single character, got '$from'") };
-        $MAP->[ ord($from) ] = $pairs{$from};
+        $MAP[ ord($from) ] = $pairs{$from};
     }
-    return $MAP;
+    return \@MAP;
 }
 
 1;

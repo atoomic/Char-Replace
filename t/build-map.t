@@ -15,7 +15,7 @@ use Char::Replace;
     note "basic build_map: single-char replacement";
     my $map = Char::Replace::build_map( 'a' => 'X' );
     is ref($map), 'ARRAY', q[returns array ref];
-    is scalar @$map, 256, q[256 entries];
+    is scalar @$map, ord('a') + 1, q[sparse: only populated up to highest ord];
     is Char::Replace::replace( "abcd", $map ), "Xbcd",
         q[a -> X via build_map];
 }
