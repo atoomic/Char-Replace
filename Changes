@@ -2,6 +2,13 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- Fix: correct encoding when map entries and input have different UTF-8 states;
+  previously, a UTF-8 map entry (e.g. "é" with 'use utf8') used with non-UTF-8
+  input would produce mojibake (double-encoded bytes). Now entries are properly
+  downgraded/upgraded to match the output encoding, matching Perl tr// behavior.
+  — replace() and coderef callbacks handle both directions transparently
+  — replace_inplace() croaks when encoding mismatch requires byte expansion
+  — fast path now correctly handles UTF-8 Latin-1 entries (codepoints 128-255)
 - New: code ref (callback) map entries for dynamic replacement in replace()
   — callback receives the character, return value becomes the replacement
   — return undef to keep original, empty string to delete
