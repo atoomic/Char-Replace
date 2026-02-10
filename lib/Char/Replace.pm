@@ -16,6 +16,7 @@ use Exporter 'import';
 
 our @EXPORT_OK = qw(
     replace
+    replace_multi
     replace_inplace
     trim
     trim_inplace
@@ -193,6 +194,25 @@ B<Performance>: on short strings (< 100 chars), compiled maps are B<4-5x faster>
 than array-based maps. On medium strings (~300 chars), they are B<~3x faster>.
 On very long strings, the difference is marginal since the replacement loop
 itself dominates.
+
+=head2 @output = replace_multi( \@strings, $MAP )
+
+Batch replacement: applies the same map to every string in C<@strings>,
+returning a list of replaced strings. Accepts the same map types as
+C<replace()>: array refs, compiled maps, code refs, etc.
+
+    my @clean = Char::Replace::replace_multi(
+        \@raw_lines,
+        Char::Replace::build_map( '&' => '&amp;', '<' => '&lt;' ),
+    );
+
+B<Performance>: the map is validated and the fast-path lookup table is built
+once, then reused for all strings. For 1:1 byte maps, this avoids per-string
+map setup overhead. For compiled maps, the pre-compiled table is used directly.
+When the map contains multi-char strings, deletions, or code refs, falls back
+to per-string C<_replace_str()>.
+
+Elements that are C<undef> or non-stringifiable produce C<undef> in the output.
 
 =head2 $count = replace_inplace( $string, $MAP )
 

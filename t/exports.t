@@ -36,7 +36,8 @@ use Test2::Bundle::Extended;
     use Char::Replace ':all';
 
     ::ok( defined(&replace),          'replace exported via :all' );
-    ::ok( defined(&replace_inplace),  'replace_inplace exported via :all' );
+    ::ok( defined(&replace_multi),     'replace_multi exported via :all' );
+    ::ok( defined(&replace_inplace),   'replace_inplace exported via :all' );
     ::ok( defined(&trim),             'trim exported via :all' );
     ::ok( defined(&trim_inplace),     'trim_inplace exported via :all' );
     ::ok( defined(&identity_map),     'identity_map exported via :all' );

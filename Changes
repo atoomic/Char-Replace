@@ -2,6 +2,15 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- New replace_multi(): batch replacement across an array of strings with a
+  single map setup; the fast-path lookup table is built once and reused for
+  all strings, reducing per-string overhead
+- Fix: re-fetch AvARRAY pointer after coderef call_sv() in _replace_str()
+  general path; a callback that modifies the map array could invalidate the
+  cached pointer (defensive fix)
+- Fix: make _normalize_encoding temporary SVs mortal (sv_2mortal) to prevent
+  a potential memory leak if ENSURE_ROOM croaks due to buffer overflow
+
 - Fix: IS_SPACE macro now includes vertical tab (\v / 0x0B), matching Perl's
   \s definition; trim() and trim_inplace() previously did not strip vertical tabs
 - Refactor: extract _apply_pv_replacement() helper to DRY the normalize +

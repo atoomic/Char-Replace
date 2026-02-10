@@ -38,6 +38,7 @@ Changes file uses `{{$NEXT}}` placeholder.
 | Function | Type | Description |
 |----------|------|-------------|
 | `replace()` | allocating | character replacement with full map support |
+| `replace_multi()` | batch | replace across array of strings (single map setup) |
 | `replace_inplace()` | in-place | 1:1 byte replacement only |
 | `trim()` | allocating | strip leading/trailing whitespace |
 | `trim_inplace()` | in-place | strip whitespace, returns bytes removed |

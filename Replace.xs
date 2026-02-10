@@ -829,3 +829,82 @@ CODE:
 }
 OUTPUT:
   RETVAL
+
+void
+replace_multi(strings, map)
+  SV *strings;
+  SV *map;
+PPCODE:
+{
+  AV *av;
+  SSize_t count;
+  SSize_t j;
+
+  if ( !strings || !SvROK(strings) || SvTYPE(SvRV(strings)) != SVt_PVAV )
+    croak("replace_multi: first argument must be an array ref");
+
+  av = (AV *)SvRV(strings);
+  count = av_len(av) + 1;
+
+  /* Check for compiled map */
+  {
+    const char *compiled = _is_compiled_map( aTHX_ map );
+    if ( compiled ) {
+      EXTEND(SP, count);
+      for ( j = 0; j < count; ++j ) {
+        SV **elem = av_fetch(av, j, 0);
+        if ( elem && *elem && (SvOK(*elem) || SvMAGICAL(*elem))
+             && (!SvROK(*elem) || SvAMAGIC(*elem)) ) {
+          STRLEN len;
+          char *src = SvPV(*elem, len);
+          int is_utf8 = SvUTF8(*elem) ? 1 : 0;
+          PUSHs( sv_2mortal( _apply_fast_map( aTHX_ compiled, src, len, is_utf8, *elem ) ) );
+        } else {
+          PUSHs( &PL_sv_undef );
+        }
+      }
+      XSRETURN(count);
+    }
+  }
+
+  /* Check for array ref map: try fast path once, use for all strings */
+  if ( map && SvROK(map) && SvTYPE(SvRV(map)) == SVt_PVAV
+       && AvFILL( SvRV(map) ) >= 0 ) {
+    AV *mapav = (AV *)SvRV(map);
+    SV **ary = AvARRAY(mapav);
+    SSize_t map_top = AvFILL(mapav);
+    char fast_map[256];
+
+    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, 0 ) ) {
+      /* Fast path: all entries are 1:1 byte replacements.
+       * Apply the same lookup table to every string. */
+      EXTEND(SP, count);
+      for ( j = 0; j < count; ++j ) {
+        SV **elem = av_fetch(av, j, 0);
+        if ( elem && *elem && (SvOK(*elem) || SvMAGICAL(*elem))
+             && (!SvROK(*elem) || SvAMAGIC(*elem)) ) {
+          STRLEN len;
+          char *src = SvPV(*elem, len);
+          int is_utf8 = SvUTF8(*elem) ? 1 : 0;
+          PUSHs( sv_2mortal( _apply_fast_map( aTHX_ fast_map, src, len, is_utf8, *elem ) ) );
+        } else {
+          PUSHs( &PL_sv_undef );
+        }
+      }
+      XSRETURN(count);
+    }
+  }
+
+  /* General path: fall back to per-string _replace_str */
+  EXTEND(SP, count);
+  for ( j = 0; j < count; ++j ) {
+    SV **elem = av_fetch(av, j, 0);
+    if ( elem && *elem && (SvOK(*elem) || SvMAGICAL(*elem))
+         && (!SvROK(*elem) || SvAMAGIC(*elem)) ) {
+      PUSHs( sv_2mortal( _replace_str( aTHX_ *elem, map ) ) );
+    } else {
+      PUSHs( &PL_sv_undef );
+    }
+  }
+  XSRETURN(count);
+}
