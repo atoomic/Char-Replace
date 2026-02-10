@@ -21,12 +21,6 @@ BEGIN {
     XSLoader::load(__PACKAGE__);
 }
 
-sub identity_map {
-    my $MAP = [];
-    $MAP->[ $_ ] = chr($_) for 0..255;
-    return $MAP; 
-}
-
 sub build_map {
     my (%pairs) = @_;
     my $MAP = identity_map();
