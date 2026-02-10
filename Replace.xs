@@ -90,6 +90,85 @@ SV *_replace_str( SV *sv, SV *map ) {
   is_utf8 = SvUTF8(sv) ? 1 : 0;
 
   /*
+   * Fast path: when every map entry is a 1:1 byte replacement (single-char
+   * PV, IV 0-255, or identity), we precompute a 256-byte lookup table and
+   * avoid per-byte SV type dispatch entirely.
+   */
+  {
+    char fast_map[256];
+    int can_fast_path = 1;
+    int ix;
+    SSize_t scan_top = map_top < 255 ? map_top : 255;
+
+    /* initialize identity */
+    for ( ix = 0; ix < 256; ++ix )
+      fast_map[ix] = (char) ix;
+
+    /* scan map entries to build the lookup table */
+    for ( ix = 0; ix <= scan_top; ++ix ) {
+      SV *entry;
+      if ( !ary[ix] )
+        continue;
+      entry = ary[ix];
+      if ( SvPOK( entry ) ) {
+        STRLEN slen;
+        char *pv = SvPV( entry, slen );
+        if ( slen == 1 ) {
+          fast_map[ix] = pv[0];
+        } else {
+          /* multi-char or deletion: can't use fast path */
+          can_fast_path = 0;
+          break;
+        }
+      } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
+        IV val = SvIV( entry );
+        if ( val >= 0 && val <= 255 ) {
+          fast_map[ix] = (char) val;
+        }
+        /* out-of-range: keep identity (already set) */
+      }
+      /* undef/other: identity (already set) */
+    }
+
+    if ( can_fast_path ) {
+      reply = newSV( len + 1 );
+      SvPOK_on(reply);
+      str = SvPVX(reply);
+
+      if ( !is_utf8 ) {
+        /* tight loop: no SV dispatch, no UTF-8 checks */
+        for ( i = 0; i < len; ++i )
+          str[i] = fast_map[(unsigned char) src[i]];
+      } else {
+        /* UTF-8 aware fast path: use table for ASCII, copy multi-byte sequences */
+        STRLEN out = 0;
+        for ( i = 0; i < len; ++i, ++out ) {
+          unsigned char c = (unsigned char) src[i];
+          if ( c >= 0x80 ) {
+            STRLEN seq_len = UTF8_SEQ_LEN(c);
+            STRLEN k;
+            if ( i + seq_len > len ) seq_len = len - i;
+            for ( k = 0; k < seq_len; ++k )
+              str[out + k] = src[i + k];
+            i += seq_len - 1;    /* -1: loop increments */
+            out += seq_len - 1;  /* -1: loop increments */
+          } else {
+            str[out] = fast_map[c];
+          }
+        }
+        i = out; /* final output length */
+      }
+
+      str[i] = '\0';
+      SvCUR_set(reply, i);
+      if ( SvUTF8(sv) )
+        SvUTF8_on(reply);
+      return reply;
+    }
+  }
+  /* end fast path — fall through to general path */
+
+  /*
    * Allocate the reply SV up front and write directly into its buffer.
    * This avoids Newx + newSVpvn_flags + Safefree (one alloc + copy saved).
    */
@@ -222,6 +301,77 @@ IV _replace_inplace( SV *sv, SV *map ) {
   ary = AvARRAY(mapav);
   map_top = AvFILL(mapav);
   is_utf8 = SvUTF8(sv) ? 1 : 0;
+
+  /*
+   * Fast path: precompute a 256-byte lookup table.
+   * Only valid when all map entries are 1:1 byte replacements.
+   * Croaks on multi-char/empty entries are deferred to the general path.
+   */
+  {
+    char fast_map[256];
+    int can_fast_path = 1;
+    int ix;
+    SSize_t scan_top = map_top < 255 ? map_top : 255;
+
+    for ( ix = 0; ix < 256; ++ix )
+      fast_map[ix] = (char) ix;
+
+    for ( ix = 0; ix <= scan_top; ++ix ) {
+      SV *entry;
+      if ( !ary[ix] )
+        continue;
+      entry = ary[ix];
+      if ( SvPOK( entry ) ) {
+        STRLEN slen;
+        char *pv = SvPV( entry, slen );
+        if ( slen == 1 ) {
+          fast_map[ix] = pv[0];
+        } else {
+          /* multi-char or deletion: must use general path to croak */
+          can_fast_path = 0;
+          break;
+        }
+      } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
+        IV val = SvIV( entry );
+        if ( val >= 0 && val <= 255 ) {
+          fast_map[ix] = (char) val;
+        }
+      }
+    }
+
+    if ( can_fast_path ) {
+      if ( !is_utf8 ) {
+        for ( i = 0; i < len; ++i ) {
+          char replacement = fast_map[(unsigned char) str[i]];
+          if ( str[i] != replacement ) {
+            str[i] = replacement;
+            ++count;
+          }
+        }
+      } else {
+        for ( i = 0; i < len; ++i ) {
+          unsigned char c = (unsigned char) str[i];
+          if ( c >= 0x80 ) {
+            STRLEN seq_len = UTF8_SEQ_LEN(c);
+            if ( i + seq_len > len ) seq_len = len - i;
+            i += seq_len - 1;
+            continue;
+          }
+          {
+            char replacement = fast_map[c];
+            if ( str[i] != replacement ) {
+              str[i] = replacement;
+              ++count;
+            }
+          }
+        }
+      }
+      if ( count )
+        SvSETMAGIC(sv);
+      return count;
+    }
+  }
+  /* end fast path */
 
   for ( i = 0; i < len; ++i ) {
     unsigned char c = (unsigned char) str[i];
