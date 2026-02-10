@@ -117,8 +117,8 @@ static int _build_fast_map( pTHX_ char fast_map[256], SV **ary, SSize_t map_top,
 }
 
 SV *_trim_sv( pTHX_ SV *sv ) {
-  STRLEN len  = SvCUR(sv);
-  char *str = SvPVX(sv);
+  STRLEN len;
+  char *str = SvPV(sv, len);
   char *end;
   SV *reply;
 
@@ -130,13 +130,13 @@ SV *_trim_sv( pTHX_ SV *sv ) {
 
   end = str + len - 1;
 
-  // Skip whitespace at front...
+  /* skip whitespace at front */
   while ( len > 0 && IS_SPACE( (unsigned char) *str) ) {
     ++str;
     --len;
   }
 
-  // Trim at end...
+  /* trim at end */
   while (end > str && IS_SPACE( (unsigned char) *end) ) {
     end--;
     --len;
