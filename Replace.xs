@@ -84,9 +84,13 @@ SV *_trim_sv( SV *sv ) {
   STRLEN len  = SvCUR(sv);
   char *str = SvPVX(sv);
   char *end;
+  SV *reply;
 
-  if ( len == 0 )
-    return newSVpvn_flags( str, 0, SvUTF8(sv) );
+  if ( len == 0 ) {
+    reply = newSVpvn_flags( str, 0, SvUTF8(sv) );
+    if ( SvTAINTED(sv) ) SvTAINTED_on(reply);
+    return reply;
+  }
 
   end = str + len - 1;
 
@@ -102,7 +106,9 @@ SV *_trim_sv( SV *sv ) {
     --len;
   }
 
-  return newSVpvn_flags( str, len, SvUTF8(sv) );
+  reply = newSVpvn_flags( str, len, SvUTF8(sv) );
+  if ( SvTAINTED(sv) ) SvTAINTED_on(reply);
+  return reply;
 }
 
 /*
@@ -176,7 +182,9 @@ SV *_replace_str( SV *sv, SV *map ) {
     || AvFILL( SvRV(map) ) < 0
     ) {
       src = SvPV(sv, len);
-      return newSVpvn_flags( src, len, SvUTF8(sv) ); /* no alteration */
+      reply = newSVpvn_flags( src, len, SvUTF8(sv) ); /* no alteration */
+      if ( SvTAINTED(sv) ) SvTAINTED_on(reply);
+      return reply;
   }
 
   src = SvPV(sv, len);
@@ -232,6 +240,8 @@ SV *_replace_str( SV *sv, SV *map ) {
 
       if ( SvUTF8(sv) )
         SvUTF8_on(reply);
+      if ( SvTAINTED(sv) )
+        SvTAINTED_on(reply);
       return reply;
     }
   }
@@ -384,6 +394,8 @@ SV *_replace_str( SV *sv, SV *map ) {
   SvCUR_set(reply, ix_newstr);
   if ( SvUTF8(sv) )
     SvUTF8_on(reply);
+  if ( SvTAINTED(sv) )
+    SvTAINTED_on(reply);
 
   return reply;
 }
