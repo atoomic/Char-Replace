@@ -8,6 +8,10 @@ use Test2::Tools::Explain;
 
 use Char::Replace;
 
+# functions can also be imported for convenience:
+#   use Char::Replace qw(replace trim build_map);
+#   use Char::Replace ':all';  # import everything
+
 our ( $STR, @MAP );
 
 =pod
