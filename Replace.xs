@@ -16,6 +16,18 @@
 
 #define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f')
 
+/*
+ * UTF8_SEQ_LEN: given a lead byte c (>= 0x80), return the expected
+ * number of bytes in the UTF-8 sequence.  Continuation bytes (0x80-0xBF)
+ * return 1 (copy-as-is).
+ */
+#define UTF8_SEQ_LEN(c) \
+  ( (c) >= 0xFC ? 6 : \
+    (c) >= 0xF8 ? 5 : \
+    (c) >= 0xF0 ? 4 : \
+    (c) >= 0xE0 ? 3 : \
+    (c) >= 0xC0 ? 2 : 1 )
+
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 IV _replace_inplace( SV *sv, SV *map );
@@ -92,13 +104,7 @@ SV *_replace_str( SV *sv, SV *map ) {
      * whose continuation bytes might collide with map entries.
      */
     if ( is_utf8 && c >= 0x80 ) {
-      STRLEN seq_len = 1;
-      if      ( c >= 0xFC ) seq_len = 6;
-      else if ( c >= 0xF8 ) seq_len = 5;
-      else if ( c >= 0xF0 ) seq_len = 4;
-      else if ( c >= 0xE0 ) seq_len = 3;
-      else if ( c >= 0xC0 ) seq_len = 2;
-      /* else: continuation byte (0x80-0xBF) — copy as-is, seq_len=1 */
+      STRLEN seq_len = UTF8_SEQ_LEN(c);
 
       /* clamp to remaining bytes to avoid overread on malformed input */
       if ( i + seq_len > len ) seq_len = len - i;
@@ -220,12 +226,7 @@ IV _replace_inplace( SV *sv, SV *map ) {
 
     /* UTF-8 safety: skip multi-byte sequences */
     if ( is_utf8 && c >= 0x80 ) {
-      STRLEN seq_len = 1;
-      if      ( c >= 0xFC ) seq_len = 6;
-      else if ( c >= 0xF8 ) seq_len = 5;
-      else if ( c >= 0xF0 ) seq_len = 4;
-      else if ( c >= 0xE0 ) seq_len = 3;
-      else if ( c >= 0xC0 ) seq_len = 2;
+      STRLEN seq_len = UTF8_SEQ_LEN(c);
       if ( i + seq_len > len ) seq_len = len - i;
       i += seq_len - 1; /* -1 because the loop increments */
       continue;
