@@ -155,9 +155,9 @@ You can then adjust one or several characters.
 =head2 $map = build_map( char => replacement, ... )
 
 Convenience constructor: takes a hash of single-character keys and their
-replacement values, and returns an array ref suitable for C<replace()> or
-C<replace_inplace()>. Starts from an identity map, so unmapped characters
-pass through unchanged.
+replacement values, and returns a sparse array ref suitable for C<replace()> or
+C<replace_inplace()>. Unmapped characters pass through unchanged (C<undef>
+entries in the array are treated as identity by the XS code).
 
     my $map = Char::Replace::build_map(
         'a' => 'AA',

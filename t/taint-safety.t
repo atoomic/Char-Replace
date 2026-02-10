@@ -140,4 +140,28 @@ sub taint {
     ok tainted($r), q[replace: taint preserved with code ref entry];
 }
 
+{
+    note "replace(): taint with compiled map";
+
+    my $map = Char::Replace::build_map( 'a' => 'X', 'b' => 'Y' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my $t = taint("abcabc");
+    my $r = Char::Replace::replace($t, $compiled);
+    ok tainted($r), q[replace: compiled map preserves taint];
+    is $r, "XYcXYc", q[replace: compiled map produces correct output];
+}
+
+{
+    note "replace_inplace(): taint with compiled map";
+
+    my $map = Char::Replace::build_map( 'a' => 'X' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my $t = taint("abcabc");
+    Char::Replace::replace_inplace($t, $compiled);
+    ok tainted($t), q[replace_inplace: compiled map preserves taint];
+    is $t, "XbcXbc", q[replace_inplace: compiled map produces correct output];
+}
+
 done_testing;
