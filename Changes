@@ -6,6 +6,8 @@ Revision history for Char-Replace
 
 - Fix compiling issue with threaded Perl versions
 - Fix compiling warnings
+- New replace_inplace(): zero-allocation in-place 1:1 byte replacement
+  (up to 3.5x faster than replace() for long strings)
 
 0.005     2025-05-18 15:27:02-06:00 America/Denver
 

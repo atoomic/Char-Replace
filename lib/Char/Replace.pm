@@ -49,6 +49,8 @@ XS helpers to perform some basic character replacement on strings.
 
 =item replace: replace (transliterate) one or more ASCII characters
 
+=item replace_inplace: fast in-place 1:1 character replacement (no allocation)
+
 =item trim: remove leading and trailing spaces of a string
 
 =back
@@ -98,6 +100,39 @@ You can then adjust one or several characters.
 
     # replaces all 'a' by 'XYZ'
     Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
+
+=head2 $count = replace_inplace( $string, $MAP )
+
+Modifies C<$string> in place, applying 1:1 byte replacements from C<$MAP>.
+Returns the number of bytes actually changed.
+
+Unlike C<replace()>, this function does B<not> allocate a new string — it
+modifies the existing SV buffer directly. This makes it significantly faster
+(up to 3.5x for long strings) but restricts map entries to single-character
+replacements only:
+
+=over
+
+=item a single-character string (PV of length 1)
+
+=item an integer (IV) in range 0–255
+
+=item undef — keeps the original character unchanged
+
+=back
+
+Multi-character strings and empty strings (deletion) will cause a croak.
+Use C<replace()> when you need expansion or deletion.
+
+    my $map = Char::Replace::identity_map();
+    $map->[ ord('a') ] = 'A';
+
+    my $str = "abcabc";
+    my $n = Char::Replace::replace_inplace( $str, $map );
+    # $str is now "AbcAbc", $n is 2
+
+UTF-8 safety applies: multi-byte sequences are skipped, only ASCII bytes
+are eligible for replacement.
 
 =head2 $string = trim( $string )
 
