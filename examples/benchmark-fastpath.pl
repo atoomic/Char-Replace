@@ -29,7 +29,14 @@ my $tr_result = do { my $s = $str; $s =~ tr/abcd/ABCD/; $s };
 my $xs_result = Char::Replace::replace( $str, \@map );
 die "mismatch!" unless $tr_result eq $xs_result;
 
-print "=== 1:1 map (fast path eligible): a->A, b->B, c->C, d->D ===\n\n";
+# Sparse map via build_map (same replacements)
+my $sparse = Char::Replace::build_map( 'a' => 'A', 'b' => 'B', 'c' => 'C', 'd' => 'D' );
+
+# Compiled map (pre-baked lookup table)
+my $compiled = Char::Replace::compile_map( \@map );
+
+print "=== 1:1 map: a->A, b->B, c->C, d->D ===\n";
+print "    Compares: tr///, array map, sparse map, compiled map, inplace\n\n";
 
 for my $label ( "short (8 chars)", "medium (~300 chars)", "long (~30K chars)" ) {
     my $input = $label =~ /short/  ? "abcdabcd"
@@ -44,8 +51,14 @@ for my $label ( "short (8 chars)", "medium (~300 chars)", "long (~30K chars)" ) 
             $s =~ tr/abcd/ABCD/;
             return $s;
         },
-        'replace()' => sub {
+        'replace(array)' => sub {
             return Char::Replace::replace( $input, \@map );
+        },
+        'replace(sparse)' => sub {
+            return Char::Replace::replace( $input, $sparse );
+        },
+        'replace(compiled)' => sub {
+            return Char::Replace::replace( $input, $compiled );
         },
         'replace_inplace()' => sub {
             my $s = $input;
