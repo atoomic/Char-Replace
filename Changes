@@ -2,6 +2,10 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- Fix: accept non-PV inputs (integers, floats, tied scalars, overloaded objects);
+  previously, all functions used SvPOK() which silently returned undef/0 for
+  anything without the string flag already set. Now uses SvOK()+SvMAGICAL() to
+  properly accept any stringifiable value while still rejecting plain references.
 - Fix: correct encoding when map entries and input have different UTF-8 states;
   previously, a UTF-8 map entry (e.g. "é" with 'use utf8') used with non-UTF-8
   input would produce mojibake (double-encoded bytes). Now entries are properly

@@ -649,7 +649,7 @@ replace(sv, map)
   SV *sv;
   SV *map;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && (SvOK(sv) || SvMAGICAL(sv)) && (!SvROK(sv) || SvAMAGIC(sv)) ) {
      RETVAL = _replace_str( aTHX_ sv, map );
   } else {
      RETVAL = &PL_sv_undef;
@@ -661,7 +661,7 @@ SV*
 trim(sv)
   SV *sv;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && (SvOK(sv) || SvMAGICAL(sv)) && (!SvROK(sv) || SvAMAGIC(sv)) ) {
      RETVAL = _trim_sv( aTHX_ sv );
   } else {
      RETVAL = &PL_sv_undef;
@@ -674,7 +674,7 @@ replace_inplace(sv, map)
   SV *sv;
   SV *map;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && (SvOK(sv) || SvMAGICAL(sv)) && (!SvROK(sv) || SvAMAGIC(sv)) ) {
      RETVAL = _replace_inplace( aTHX_ sv, map );
   } else {
      RETVAL = 0;
@@ -686,7 +686,7 @@ IV
 trim_inplace(sv)
   SV *sv;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && (SvOK(sv) || SvMAGICAL(sv)) && (!SvROK(sv) || SvAMAGIC(sv)) ) {
      RETVAL = _trim_inplace( aTHX_ sv );
   } else {
      RETVAL = 0;
