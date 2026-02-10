@@ -8,6 +8,9 @@ Revision history for Char-Replace
 - Fix compiling warnings
 - New replace_inplace(): zero-allocation in-place 1:1 byte replacement
   (up to 3.5x faster than replace() for long strings)
+- New build_map(): convenience constructor from char => replacement pairs
+- Perf: replace() writes directly into SV buffer (avoids temp alloc+copy)
+- Refactor: extract UTF8_SEQ_LEN macro for shared UTF-8 byte handling
 
 0.005     2025-05-18 15:27:02-06:00 America/Denver
 
