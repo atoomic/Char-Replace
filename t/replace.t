@@ -78,4 +78,22 @@ is $got, $expect, "need to grow the string" or diag ":$got:\n", ":$expect:\n";
 
 }
 
+{
+    note "replace char at highest map index (255)";
+    @MAP = @{ Char::Replace::identity_map() };
+    $MAP[255] = 'END';
+
+    is Char::Replace::replace( chr(255), \@MAP ), 'END',
+        q[char 255 replaced via map];
+    is Char::Replace::replace( "a" . chr(255) . "b", \@MAP ), 'aENDb',
+        q[char 255 replaced in context];
+
+    $MAP[254] = 'NEAR';
+    is Char::Replace::replace( chr(254) . chr(255), \@MAP ), 'NEAREND',
+        q[chars 254 and 255 both replaced];
+
+    is Char::Replace::replace( "", \@MAP ), "",
+        q[empty string returns empty string];
+}
+
 done_testing;

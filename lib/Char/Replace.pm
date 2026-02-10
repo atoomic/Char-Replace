@@ -58,9 +58,20 @@ XS helpers to perform some basic character replacement on strings.
 =head2 $output = replace( $string, $MAP )
 
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
-Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid
+Map entries can be a string (replacement), an empty string (deletion), or undef (no change).
+Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid.
+
+When the input string has the UTF-8 flag set, only ASCII bytes (0x00-0x7F) are
+eligible for replacement. Multi-byte UTF-8 sequences are copied through unchanged,
+preventing corruption of wide characters whose internal bytes might collide with
+map entries.
 
 view L</SYNOPSIS> or example just after.
+
+Setting a map entry to an empty string deletes the character from the output:
+
+    $map->[ ord('x') ] = q[];    # delete 'x'
+    Char::Replace::replace( "fox", $map ) eq "fo" or die;
 
 =head2 $map = identity_map()
 

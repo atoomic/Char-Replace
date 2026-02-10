@@ -57,6 +57,8 @@ SV *_replace_str( SV *sv, SV *map ) {
   STRLEN   ix_newstr = 0;
   AV           *mapav;
   SV           *reply;
+  SSize_t       map_top;                    /* highest valid index in the map */
+  int           is_utf8;                    /* whether the input string is UTF-8 */
 
   if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
     || AvFILL( SvRV(map) ) <= 0
@@ -71,19 +73,56 @@ SV *_replace_str( SV *sv, SV *map ) {
 
   mapav = (AV *)SvRV(map);
   SV **ary = AvARRAY(mapav);
+  map_top = AvFILL(mapav);
+  is_utf8 = SvUTF8(sv) ? 1 : 0;
 
   /* Always allocate memory using Perl's memory management */
   Newx(str, str_size, char);
 
-
   for ( i = 0; i < len; ++i, ++ptr, ++ix_newstr ) {
-    char c = *ptr;
-    int  ix = (int) ( c );
-    if ( ix < 0 ) ix = 256 + ix;
-    // need to croak in DEBUG mode if char is invalid
+    unsigned char c = (unsigned char) *ptr;
+    int  ix = (int) c;
 
-    str[ix_newstr] = c; /* default always performed... */
-    if ( ix >= AvFILL(mapav)
+    /*
+     * UTF-8 safety: when the input has the UTF-8 flag set,
+     * multi-byte sequences (bytes >= 0x80) must be copied through
+     * unchanged. We only apply the replacement map to ASCII bytes
+     * (0x00–0x7F). This prevents corrupting multi-byte characters
+     * whose continuation bytes might collide with map entries.
+     */
+    if ( is_utf8 && c >= 0x80 ) {
+      STRLEN seq_len = 1;
+      if      ( c >= 0xFC ) seq_len = 6;
+      else if ( c >= 0xF8 ) seq_len = 5;
+      else if ( c >= 0xF0 ) seq_len = 4;
+      else if ( c >= 0xE0 ) seq_len = 3;
+      else if ( c >= 0xC0 ) seq_len = 2;
+      /* else: continuation byte (0x80-0xBF) — copy as-is, seq_len=1 */
+
+      /* clamp to remaining bytes to avoid overread on malformed input */
+      if ( i + seq_len > len ) seq_len = len - i;
+
+      /* ensure buffer has room */
+      if ( str_size <= (ix_newstr + seq_len + 1) ) {
+        while ( str_size <= (ix_newstr + seq_len + 1) )
+          str_size *= 2;
+        Renew( str, str_size, char );
+      }
+
+      /* copy the entire multi-byte sequence */
+      str[ix_newstr] = (char) c;
+      {
+        STRLEN k;
+        for ( k = 1; k < seq_len; ++k ) {
+          ++i; ++ptr; ++ix_newstr;
+          str[ix_newstr] = *ptr;
+        }
+      }
+      continue;
+    }
+
+    str[ix_newstr] = (char) c; /* default always performed... */
+    if ( ix > map_top
       || !ary[ix]
       ) {
       continue;
@@ -92,10 +131,11 @@ SV *_replace_str( SV *sv, SV *map ) {
       if ( SvPOK( entry ) ) {
         STRLEN slen;
         char *replace = SvPV( entry, slen ); /* length of the string used for replacement */
-        if ( slen <= 0  ) {
+        if ( slen == 0  ) {
+          --ix_newstr; /* undo the default write: delete the character */
           continue;
         } else {
-          int j;
+          STRLEN j;
 
           /* Check if we need to expand. */
           if (str_size <= (ix_newstr + slen + 1) ) { /* +1 for \0 */
@@ -116,7 +156,7 @@ SV *_replace_str( SV *sv, SV *map ) {
           str[ix_newstr] = replace[j];
         }
       } /* end - SvPOK */
-    } /* end - AvFILL || AvARRAY */
+    } /* end - map_top || AvARRAY */
   }
 
   str[ix_newstr] = '\0'; /* add the final trailing \0 character */
