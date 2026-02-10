@@ -124,6 +124,22 @@ use Char::Replace;
 }
 
 {
+    note "vertical tab (\\v / 0x0B)";
+    my $str = "\x0Bhello\x0B";
+    my $count = Char::Replace::trim_inplace($str);
+    is $str,   "hello", q[vertical tabs trimmed];
+    is $count, 2,       q[2 vertical tabs];
+}
+
+{
+    note "vertical tab mixed with other whitespace";
+    my $str = "\x0B\t hello \n\x0B";
+    my $count = Char::Replace::trim_inplace($str);
+    is $str,   "hello", q[vertical tab + mixed ws trimmed];
+    is $count, 6,       q[6 whitespace bytes removed];
+}
+
+{
     note "internal whitespace preserved";
     my $str = "  hello   world  ";
     my $count = Char::Replace::trim_inplace($str);
@@ -192,6 +208,7 @@ use Char::Replace;
         "",
         " a b c ",
         "  héllo wörld  ",
+        "\x0B hello \x0B",
     );
 
     for my $input (@tests) {

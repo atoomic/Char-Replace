@@ -15,7 +15,7 @@
 #include <XSUB.h>
 #include <embed.h>
 
-#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f')
+#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
 /*
  * UTF8_SEQ_LEN: given a lead byte c (>= 0x80), return the expected
@@ -83,6 +83,46 @@ static char *_normalize_encoding( pTHX_ SV *entry, int is_utf8, STRLEN *out_len,
   }
 
   return SvPV( entry, *out_len );
+}
+
+/*
+ * _apply_pv_replacement: normalize an SV replacement value and write it
+ * into the output buffer.  Shared by the direct-PV and coderef-return
+ * paths in _replace_str to eliminate duplication.
+ *
+ * Returns:
+ *   1  — replacement written (ix_newstr advanced)
+ *   0  — entry is an empty string (caller should --ix_newstr to delete)
+ *  -1  — encoding failure (caller should croak with context)
+ */
+static int _apply_pv_replacement( pTHX_ SV *entry, int is_utf8,
+                                  SV *reply, char **str_p, STRLEN *str_size_p,
+                                  STRLEN *ix_p ) {
+  STRLEN slen;
+  char *replace;
+  SV *tmp = NULL;
+
+  replace = _normalize_encoding( aTHX_ entry, is_utf8, &slen, &tmp );
+  if ( !replace ) {
+    return -1;
+  }
+
+  if ( slen == 0 ) {
+    if ( tmp ) SvREFCNT_dec( tmp );
+    return 0;
+  }
+
+  ENSURE_ROOM(reply, *str_p, *str_size_p, *ix_p, slen);
+
+  {
+    STRLEN j;
+    for ( j = 0; j < slen - 1; ++j )
+      (*str_p)[(*ix_p)++] = replace[j];
+    (*str_p)[*ix_p] = replace[j];
+  }
+
+  if ( tmp ) SvREFCNT_dec( tmp );
+  return 1;
 }
 
 #define COMPILED_MAP_CLASS "Char::Replace::CompiledMap"
@@ -402,35 +442,17 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
     } else {
       SV *entry = ary[ix];
       if ( SvPOK( entry ) ) {
-        STRLEN slen;
-        char *replace;
-        SV *tmp = NULL;
-
-        replace = _normalize_encoding( aTHX_ entry, is_utf8, &slen, &tmp );
-        if ( !replace ) {
+        int rc = _apply_pv_replacement( aTHX_ entry, is_utf8,
+                                        reply, &str, &str_size, &ix_newstr );
+        if ( rc == -1 ) {
           SvREFCNT_dec( reply );
           croak("Char::Replace: map entry for byte %d contains a wide character"
                 " (>255) that cannot be used with a non-UTF-8 input string", ix);
         }
-
-        if ( slen == 0  ) {
-          --ix_newstr; /* undo the default write: delete the character */
-          if ( tmp ) SvREFCNT_dec( tmp );
+        if ( rc == 0 ) {
+          --ix_newstr;
           continue;
-        } else {
-          STRLEN j;
-
-          ENSURE_ROOM(reply, str, str_size, ix_newstr, slen);
-
-          /* replace all characters except the last one, which avoids us to do a --ix_newstr after */
-          for ( j = 0 ; j < slen - 1; ++j ) {
-            str[ix_newstr++] = replace[j];
-          }
-
-          /* handle the last character */
-          str[ix_newstr] = replace[j];
         }
-        if ( tmp ) SvREFCNT_dec( tmp );
       } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
         /* IV/NV support: treat the integer value as an ordinal (chr) */
         IV val = SvIV( entry );
@@ -477,12 +499,9 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
         if ( count == 1 ) {
           result = POPs;
           if ( SvOK( result ) ) {
-            STRLEN slen;
-            char *replace;
-            SV *tmp = NULL;
-
-            replace = _normalize_encoding( aTHX_ result, is_utf8, &slen, &tmp );
-            if ( !replace ) {
+            int rc = _apply_pv_replacement( aTHX_ result, is_utf8,
+                                            reply, &str, &str_size, &ix_newstr );
+            if ( rc == -1 ) {
               PUTBACK;
               FREETMPS;
               LEAVE;
@@ -490,19 +509,9 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
               croak("Char::Replace: coderef for byte %d returned a wide character"
                     " (>255) that cannot be used with a non-UTF-8 input string", ix);
             }
-
-            if ( slen == 0 ) {
+            if ( rc == 0 ) {
               --ix_newstr; /* delete the character */
-            } else {
-              STRLEN j;
-
-              ENSURE_ROOM(reply, str, str_size, ix_newstr, slen);
-
-              for ( j = 0; j < slen - 1; ++j )
-                str[ix_newstr++] = replace[j];
-              str[ix_newstr] = replace[j];
             }
-            if ( tmp ) SvREFCNT_dec( tmp );
           }
           /* undef result: keep original (already written) */
         }

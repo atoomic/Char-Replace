@@ -237,7 +237,7 @@ want to avoid allocation overhead, not when you need maximum speed.
 =head2 $string = trim( $string )
 
 trim removes all trailing and leading characters of a string
-Trailing and leading space characters  ' ', '\r', '\n', '\t', '\f' are removed.
+Trailing and leading space characters  ' ', '\r', '\n', '\t', '\f', '\v' (vertical tab) are removed.
 A new string is returned.
 
 The removal is performed in XS.
@@ -255,7 +255,7 @@ modifies the existing SV directly. Uses C<sv_chop()> internally for
 efficient leading-whitespace removal.
 
 The same whitespace characters as C<trim()> are recognized:
-C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>.
+C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>, C<'\v'> (vertical tab).
 
     my $str = "  hello world  ";
     my $n = Char::Replace::trim_inplace( $str );

@@ -2,6 +2,11 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- Fix: IS_SPACE macro now includes vertical tab (\v / 0x0B), matching Perl's
+  \s definition; trim() and trim_inplace() previously did not strip vertical tabs
+- Refactor: extract _apply_pv_replacement() helper to DRY the normalize +
+  buffer-write pattern shared between PV map entries and coderef return values
+  in _replace_str() general path
 - New: Exporter support — functions can now be imported individually or via :all
   (e.g. 'use Char::Replace qw(replace trim)' or 'use Char::Replace ":all"')
   Nothing is exported by default (backwards compatible)
