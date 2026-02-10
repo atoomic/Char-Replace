@@ -2,6 +2,14 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- New: code ref (callback) map entries for dynamic replacement in replace()
+  — callback receives the character, return value becomes the replacement
+  — return undef to keep original, empty string to delete
+  — replace_inplace() croaks on code ref entries (use replace() instead)
+- Fix: memory leak when a code ref callback dies during replace()
+  (reply SV was not freed on exception; now uses G_EVAL + croak_sv)
+- Fix taint propagation: replace() and trim() now correctly propagate the
+  taint flag from input to output (previously laundered tainted data)
 - New trim_inplace(): zero-allocation in-place whitespace trimming
   (modifies string directly, returns count of bytes removed)
 - UTF-8 safety: multi-byte sequences (>= 0x80) are now copied through
