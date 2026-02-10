@@ -874,8 +874,21 @@ PPCODE:
     SV **ary = AvARRAY(mapav);
     SSize_t map_top = AvFILL(mapav);
     char fast_map[256];
+    int any_utf8 = 0;
 
-    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, 0 ) ) {
+    /* Scan inputs: if any string is UTF-8, the fast map must be built
+     * with is_utf8=1 to reject entries that need encoding conversion.
+     * Without this, a non-UTF-8 high byte (e.g. chr(0xE9)) would be
+     * placed raw into a UTF-8 output string, producing malformed UTF-8. */
+    for ( j = 0; j < count; ++j ) {
+      SV **elem = av_fetch(av, j, 0);
+      if ( elem && *elem && SvUTF8(*elem) ) {
+        any_utf8 = 1;
+        break;
+      }
+    }
+
+    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, any_utf8 ) ) {
       /* Fast path: all entries are 1:1 byte replacements.
        * Apply the same lookup table to every string. */
       EXTEND(SP, count);

@@ -120,6 +120,34 @@ use Char::Replace qw(replace_multi replace build_map identity_map compile_map);
     is( $results[1], "fA\x{e7}Ade", "replace_multi UTF-8: façade -> fAçAde" );
 }
 
+# -- mixed UTF-8/non-UTF-8 strings with high-byte map entry --
+# Regression: replace_multi must produce the same output as replace()
+# when the batch contains UTF-8 strings and the map has a non-UTF-8
+# entry with a high byte (>= 0x80).  Previously, the batch fast path
+# used is_utf8=0 for _build_fast_map, inserting a raw high byte into
+# UTF-8 output and producing malformed UTF-8.
+
+{
+    my @map;
+    $map[ord('a')] = chr(0xE9);  # Latin-1 é (non-UTF-8 byte)
+
+    my $plain = "abc";
+    my $utf8  = "abc";
+    utf8::upgrade($utf8);
+
+    # Single replace handles this correctly via _normalize_encoding
+    my $expect_plain = replace($plain, \@map);
+    my $expect_utf8  = replace($utf8, \@map);
+
+    my @results = replace_multi([$plain, $utf8], \@map);
+    is( $results[0], $expect_plain,
+        "replace_multi high-byte map: non-UTF-8 string matches replace()" );
+    is( $results[1], $expect_utf8,
+        "replace_multi high-byte map: UTF-8 string matches replace()" );
+    ok( utf8::is_utf8($results[1]),
+        "replace_multi high-byte map: UTF-8 flag preserved" );
+}
+
 # -- consistency with replace() --
 
 {
