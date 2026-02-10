@@ -27,6 +27,17 @@ sub identity_map {
     return $MAP; 
 }
 
+sub build_map {
+    my (%pairs) = @_;
+    my $MAP = identity_map();
+    for my $from ( keys %pairs ) {
+        length($from) == 1
+            or do { require Carp; Carp::croak("build_map: key must be a single character, got '$from'") };
+        $MAP->[ ord($from) ] = $pairs{$from};
+    }
+    return $MAP;
+}
+
 1;
 
 =pod
@@ -105,6 +116,22 @@ You can then adjust one or several characters.
 
     # replaces all 'a' by 'XYZ'
     Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
+
+=head2 $map = build_map( char => replacement, ... )
+
+Convenience constructor: takes a hash of single-character keys and their
+replacement values, and returns an array ref suitable for C<replace()> or
+C<replace_inplace()>. Starts from an identity map, so unmapped characters
+pass through unchanged.
+
+    my $map = Char::Replace::build_map(
+        'a' => 'AA',
+        'd' => '',       # delete
+        'x' => ord('X'), # IV
+    );
+    Char::Replace::replace( "abxd", $map ) eq "AAbX" or die;
+
+Croaks if any key is not exactly one character.
 
 =head2 $count = replace_inplace( $string, $MAP )
 
