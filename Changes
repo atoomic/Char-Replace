@@ -2,6 +2,8 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- New trim_inplace(): zero-allocation in-place whitespace trimming
+  (modifies string directly, returns count of bytes removed)
 - UTF-8 safety: multi-byte sequences (>= 0x80) are now copied through
   unchanged; replacement map is only applied to ASCII bytes (0x00-0x7F)
 - IV/NV map entries: integer values treated as character ordinals (chr)
