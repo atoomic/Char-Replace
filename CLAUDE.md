@@ -43,3 +43,4 @@ Changes file uses `{{$NEXT}}` placeholder.
 | `trim_inplace()` | in-place | strip whitespace, returns bytes removed |
 | `identity_map()` | constructor | 256-entry identity array ref |
 | `build_map()` | constructor | convenience key-value map builder |
+| `compile_map()` | optimizer | pre-bake map into 256-byte lookup table |

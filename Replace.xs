@@ -54,6 +54,26 @@ SV *_trim_sv( pTHX_ SV *sv );
 IV _replace_inplace( pTHX_ SV *sv, SV *map );
 IV _trim_inplace( pTHX_ SV *sv );
 
+#define COMPILED_MAP_CLASS "Char::Replace::CompiledMap"
+
+/*
+ * _is_compiled_map: check if an SV is a compiled map (blessed PV ref).
+ * If so, return a pointer to the 256-byte table.  Otherwise return NULL.
+ */
+static const char *_is_compiled_map( pTHX_ SV *map ) {
+  SV *inner;
+  if ( !map || !SvROK(map) )
+    return NULL;
+  inner = SvRV(map);
+  if ( !SvOBJECT(inner) || !SvPOK(inner) )
+    return NULL;
+  if ( !sv_derived_from(map, COMPILED_MAP_CLASS) )
+    return NULL;
+  if ( SvCUR(inner) != 256 )
+    return NULL;
+  return SvPVX(inner);
+}
+
 /*
  * _build_fast_map: populate a 256-byte identity lookup table, then
  * overwrite entries according to the Perl map array.
@@ -199,6 +219,56 @@ IV _trim_inplace( pTHX_ SV *sv ) {
 }
 
 
+/*
+ * _apply_fast_map: given a precomputed 256-byte table, apply it to src
+ * and write the result into a new SV.  Handles both UTF-8 and non-UTF-8
+ * inputs.  Propagates UTF-8 and taint flags.
+ *
+ * This is the inner loop shared by the ad-hoc fast path and compiled maps.
+ */
+static SV *_apply_fast_map( pTHX_ const char fast_map[256], const char *src, STRLEN len, int is_utf8, SV *sv ) {
+  SV *reply;
+  char *str;
+  STRLEN i;
+
+  reply = newSV( len + 1 );
+  SvPOK_on(reply);
+  str = SvPVX(reply);
+
+  if ( !is_utf8 ) {
+    for ( i = 0; i < len; ++i )
+      str[i] = fast_map[(unsigned char) src[i]];
+
+    str[len] = '\0';
+    SvCUR_set(reply, len);
+  } else {
+    STRLEN out = 0;
+    for ( i = 0; i < len; ++i, ++out ) {
+      unsigned char c = (unsigned char) src[i];
+      if ( c >= 0x80 ) {
+        STRLEN seq_len = UTF8_SEQ_LEN(c);
+        STRLEN k;
+        if ( i + seq_len > len ) seq_len = len - i;
+        for ( k = 0; k < seq_len; ++k )
+          str[out + k] = src[i + k];
+        i += seq_len - 1;
+        out += seq_len - 1;
+      } else {
+        str[out] = fast_map[c];
+      }
+    }
+
+    str[out] = '\0';
+    SvCUR_set(reply, out);
+  }
+
+  if ( SvUTF8(sv) )
+    SvUTF8_on(reply);
+  if ( SvTAINTED(sv) )
+    SvTAINTED_on(reply);
+  return reply;
+}
+
 SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   STRLEN len;
   char *src;
@@ -211,6 +281,16 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   SV           *reply;
   SSize_t       map_top;                    /* highest valid index in the map */
   int           is_utf8;                    /* whether the input string is UTF-8 */
+
+  /* Compiled map: skip AV iteration entirely */
+  {
+    const char *compiled = _is_compiled_map( aTHX_ map );
+    if ( compiled ) {
+      src = SvPV(sv, len);
+      is_utf8 = SvUTF8(sv) ? 1 : 0;
+      return _apply_fast_map( aTHX_ compiled, src, len, is_utf8, sv );
+    }
+  }
 
   if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
     || AvFILL( SvRV(map) ) < 0
@@ -238,46 +318,8 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   {
     char fast_map[256];
 
-    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, is_utf8 ) ) {
-      reply = newSV( len + 1 );
-      SvPOK_on(reply);
-      str = SvPVX(reply);
-
-      if ( !is_utf8 ) {
-        /* tight loop: no SV dispatch, no UTF-8 checks */
-        for ( i = 0; i < len; ++i )
-          str[i] = fast_map[(unsigned char) src[i]];
-
-        str[len] = '\0';
-        SvCUR_set(reply, len);
-      } else {
-        /* UTF-8 aware fast path: use table for ASCII, copy multi-byte sequences */
-        STRLEN out = 0;
-        for ( i = 0; i < len; ++i, ++out ) {
-          unsigned char c = (unsigned char) src[i];
-          if ( c >= 0x80 ) {
-            STRLEN seq_len = UTF8_SEQ_LEN(c);
-            STRLEN k;
-            if ( i + seq_len > len ) seq_len = len - i;
-            for ( k = 0; k < seq_len; ++k )
-              str[out + k] = src[i + k];
-            i += seq_len - 1;    /* -1: loop increments */
-            out += seq_len - 1;  /* -1: loop increments */
-          } else {
-            str[out] = fast_map[c];
-          }
-        }
-
-        str[out] = '\0';
-        SvCUR_set(reply, out);
-      }
-
-      if ( SvUTF8(sv) )
-        SvUTF8_on(reply);
-      if ( SvTAINTED(sv) )
-        SvTAINTED_on(reply);
-      return reply;
-    }
+    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, is_utf8 ) )
+      return _apply_fast_map( aTHX_ fast_map, src, len, is_utf8, sv );
   }
   /* end fast path — fall through to general path */
 
@@ -493,6 +535,46 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
  * Returns the number of bytes actually changed.
  * UTF-8 safe: multi-byte sequences (>= 0x80) are skipped.
  */
+/*
+ * _apply_fast_map_inplace: apply a precomputed 256-byte table to a writable
+ * SV buffer in place.  Returns the number of bytes changed.
+ */
+static IV _apply_fast_map_inplace( pTHX_ const char fast_map[256], char *str, STRLEN len, int is_utf8, SV *sv ) {
+  STRLEN i;
+  IV count = 0;
+
+  if ( !is_utf8 ) {
+    for ( i = 0; i < len; ++i ) {
+      char replacement = fast_map[(unsigned char) str[i]];
+      if ( str[i] != replacement ) {
+        str[i] = replacement;
+        ++count;
+      }
+    }
+  } else {
+    for ( i = 0; i < len; ++i ) {
+      unsigned char c = (unsigned char) str[i];
+      if ( c >= 0x80 ) {
+        STRLEN seq_len = UTF8_SEQ_LEN(c);
+        if ( i + seq_len > len ) seq_len = len - i;
+        i += seq_len - 1;
+        continue;
+      }
+      {
+        char replacement = fast_map[c];
+        if ( str[i] != replacement ) {
+          str[i] = replacement;
+          ++count;
+        }
+      }
+    }
+  }
+
+  if ( count )
+    SvSETMAGIC(sv);
+  return count;
+}
+
 IV _replace_inplace( pTHX_ SV *sv, SV *map ) {
   STRLEN len;
   char *str;
@@ -502,6 +584,18 @@ IV _replace_inplace( pTHX_ SV *sv, SV *map ) {
   SSize_t map_top;
   int is_utf8;
   IV count = 0;
+
+  /* Compiled map: skip AV iteration entirely */
+  {
+    const char *compiled = _is_compiled_map( aTHX_ map );
+    if ( compiled ) {
+      SvPV_force_nolen(sv);
+      str = SvPVX(sv);
+      len = SvCUR(sv);
+      is_utf8 = SvUTF8(sv) ? 1 : 0;
+      return _apply_fast_map_inplace( aTHX_ compiled, str, len, is_utf8, sv );
+    }
+  }
 
   if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
     || AvFILL( SvRV(map) ) < 0
@@ -527,37 +621,8 @@ IV _replace_inplace( pTHX_ SV *sv, SV *map ) {
   {
     char fast_map[256];
 
-    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, is_utf8 ) ) {
-      if ( !is_utf8 ) {
-        for ( i = 0; i < len; ++i ) {
-          char replacement = fast_map[(unsigned char) str[i]];
-          if ( str[i] != replacement ) {
-            str[i] = replacement;
-            ++count;
-          }
-        }
-      } else {
-        for ( i = 0; i < len; ++i ) {
-          unsigned char c = (unsigned char) str[i];
-          if ( c >= 0x80 ) {
-            STRLEN seq_len = UTF8_SEQ_LEN(c);
-            if ( i + seq_len > len ) seq_len = len - i;
-            i += seq_len - 1;
-            continue;
-          }
-          {
-            char replacement = fast_map[c];
-            if ( str[i] != replacement ) {
-              str[i] = replacement;
-              ++count;
-            }
-          }
-        }
-      }
-      if ( count )
-        SvSETMAGIC(sv);
-      return count;
-    }
+    if ( _build_fast_map( aTHX_ fast_map, ary, map_top, is_utf8 ) )
+      return _apply_fast_map_inplace( aTHX_ fast_map, str, len, is_utf8, sv );
   }
   /* end fast path */
 
@@ -709,6 +774,52 @@ CODE:
     av_store( av, i, newSVpvn( buf, 1 ) );
   }
   RETVAL = newRV_noinc( (SV *) av );
+}
+OUTPUT:
+  RETVAL
+
+SV*
+compile_map(map)
+  SV *map;
+CODE:
+{
+  AV *mapav;
+  SV **ary;
+  SSize_t map_top;
+  char fast_map[256];
+  SV *inner;
+
+  if ( !map || !SvROK(map) || SvTYPE(SvRV(map)) != SVt_PVAV
+    || AvFILL( (AV *)SvRV(map) ) < 0
+    ) {
+      croak("compile_map: argument must be a non-empty array ref");
+  }
+
+  mapav = (AV *)SvRV(map);
+  ary = AvARRAY(mapav);
+  map_top = AvFILL(mapav);
+
+  /*
+   * Build the fast map with is_utf8=0.  This is the conservative choice:
+   * entries with high bytes are decoded from UTF-8 to Latin-1 if possible.
+   * At runtime, the same table works for both UTF-8 and non-UTF-8 inputs
+   * because bytes >= 0x80 are identity-mapped and multi-byte sequences
+   * are skipped in UTF-8 mode.
+   *
+   * If any entry is not fast-path eligible (multi-char, coderef, deletion),
+   * we croak — compile_map only supports 1:1 byte maps.
+   */
+  if ( !_build_fast_map( aTHX_ fast_map, ary, map_top, 0 ) ) {
+    croak("compile_map: map contains entries not eligible for compilation"
+          " (multi-char strings, empty strings, code refs, or wide characters);"
+          " use the array ref directly with replace() for these maps");
+  }
+
+  /* Store the 256-byte table in a PV SV, blessed into CompiledMap */
+  inner = newSVpvn( fast_map, 256 );
+  RETVAL = sv_bless( newRV_noinc(inner),
+                     gv_stashpvn( COMPILED_MAP_CLASS,
+                                  sizeof(COMPILED_MAP_CLASS) - 1, GV_ADD ) );
 }
 OUTPUT:
   RETVAL

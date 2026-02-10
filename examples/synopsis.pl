@@ -73,4 +73,15 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
     is $count, 5, "5 bytes changed";
 }
 
+{ # compile_map: pre-compile a map for repeated use in hot paths
+    my $map = Char::Replace::build_map( 'a' => 'A', 'e' => 'E' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    # compiled map works with both replace() and replace_inplace()
+    is Char::Replace::replace( 'apple', $compiled ), 'ApplE', "compiled map replace";
+    my $str = 'eagle';
+    Char::Replace::replace_inplace( $str, $compiled );
+    is $str, 'EAglE', "compiled map replace_inplace";
+}
+
 done_testing;
