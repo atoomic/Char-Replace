@@ -129,4 +129,15 @@ sub taint {
     ok tainted($r), q[trim: taint preserved with UTF-8 input];
 }
 
+{
+    note "replace(): taint with code ref map entry";
+
+    my @map = @{ Char::Replace::identity_map() };
+    $map[ ord('a') ] = sub { uc $_[0] };
+
+    my $t = taint("abcd");
+    my $r = Char::Replace::replace($t, \@map);
+    ok tainted($r), q[replace: taint preserved with code ref entry];
+}
+
 done_testing;
