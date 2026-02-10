@@ -85,9 +85,10 @@ Map entries can be:
 
 =item undef — keeps the original character unchanged
 
-=back
+=item a code ref — called with the character as argument; return value is the replacement
+(return undef to keep original, empty string to delete)
 
-Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid.
+=back
 
 When the input string has the UTF-8 flag set, multi-byte character sequences
 (bytes >= 0x80) are copied through unchanged. The replacement map is only
@@ -113,6 +114,16 @@ Setting a map entry to an integer replaces the character with chr(value):
     $map->[ ord('a') ] = ord('A');  # replace 'a' with 'A'
     Char::Replace::replace( "abc", $map ) eq "Abc" or die;
 
+Setting a map entry to a code ref enables dynamic replacement:
+
+    $map->[ ord('a') ] = sub { uc $_[0] };  # uppercase callback
+    Char::Replace::replace( "abc", $map ) eq "Abc" or die;
+
+    # stateful callback
+    my $n = 0;
+    $map->[ ord('x') ] = sub { ++$n };
+    Char::Replace::replace( "xyx", $map ) eq "1y2" or die;
+
 =head2 $map = identity_map()
 
 This is a convenient helper to initialize an ASCII mapping.
@@ -137,6 +148,7 @@ pass through unchanged.
         'a' => 'AA',
         'd' => '',       # delete
         'x' => ord('X'), # IV
+        'z' => sub { uc $_[0] },  # callback
     );
     Char::Replace::replace( "abxd", $map ) eq "AAbX" or die;
 
@@ -161,8 +173,8 @@ single-character replacements only:
 
 =back
 
-Multi-character strings and empty strings (deletion) will cause a croak.
-Use C<replace()> when you need expansion or deletion.
+Multi-character strings, empty strings (deletion), and code refs will cause a croak.
+Use C<replace()> when you need expansion, deletion, or dynamic callbacks.
 
     my $map = Char::Replace::identity_map();
     $map->[ ord('a') ] = 'A';
@@ -215,14 +227,6 @@ The UTF-8 state of the string is preserved.
 
 # EXAMPLE: examples/benchmark-trim.pl
 
-
-=head1 TODO
-
-=over
-
-=item Support callback (code ref) map entries for dynamic replacement
-
-=back
 
 =head1 Warnings
 

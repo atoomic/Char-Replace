@@ -70,6 +70,10 @@ static int _build_fast_map( char fast_map[256], SV **ary, SSize_t map_top ) {
       }
       /* out-of-range: keep identity (already set) */
     }
+    /* code ref: not eligible for fast path */
+    else if ( SvROK( entry ) && SvTYPE( SvRV( entry ) ) == SVt_PVCV ) {
+      return 0;
+    }
     /* undef/other: identity (already set) */
   }
   return 1;
@@ -328,7 +332,61 @@ SV *_replace_str( SV *sv, SV *map ) {
           str[ix_newstr] = (char) val;
         }
         /* out-of-range values: keep original character (already written) */
-      } /* end - SvPOK / SvIOK / SvNOK */
+      } else if ( SvROK( entry ) && SvTYPE( SvRV( entry ) ) == SVt_PVCV ) {
+        /* Code ref: call the sub with the character as argument */
+        dSP;
+        SV *arg;
+        SV *result;
+        I32 count;
+        char ch_buf[2];
+
+        ch_buf[0] = (char) c;
+        ch_buf[1] = '\0';
+        arg = sv_2mortal( newSVpvn( ch_buf, 1 ) );
+        if ( is_utf8 )
+          SvUTF8_on( arg );
+
+        ENTER;
+        SAVETMPS;
+
+        PUSHMARK(SP);
+        XPUSHs( arg );
+        PUTBACK;
+
+        count = call_sv( SvRV( entry ), G_SCALAR );
+
+        SPAGAIN;
+
+        if ( count == 1 ) {
+          result = POPs;
+          if ( SvOK( result ) ) {
+            STRLEN slen;
+            char *replace = SvPV( result, slen );
+
+            if ( slen == 0 ) {
+              --ix_newstr; /* delete the character */
+            } else {
+              STRLEN j;
+
+              if ( str_size <= (ix_newstr + slen + 1) ) {
+                while ( str_size <= (ix_newstr + slen + 1) )
+                  str_size *= 2;
+                SvGROW( reply, str_size );
+                str = SvPVX(reply);
+              }
+
+              for ( j = 0; j < slen - 1; ++j )
+                str[ix_newstr++] = replace[j];
+              str[ix_newstr] = replace[j];
+            }
+          }
+          /* undef result: keep original (already written) */
+        }
+
+        PUTBACK;
+        FREETMPS;
+        LEAVE;
+      } /* end - SvPOK / SvIOK / SvNOK / code ref */
     } /* end - map_top || AvARRAY */
   }
 
@@ -459,6 +517,9 @@ IV _replace_inplace( SV *sv, SV *map ) {
           }
         }
         /* out-of-range: keep original */
+      } else if ( SvROK( entry ) && SvTYPE( SvRV( entry ) ) == SVt_PVCV ) {
+        croak("replace_inplace: map entry for byte %d is a code ref"
+              " (not supported for in-place replacement; use replace() instead)", ix);
       }
     }
   }

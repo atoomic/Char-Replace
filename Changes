@@ -2,6 +2,10 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- New: code ref (callback) map entries for dynamic replacement in replace()
+  — callback receives the character, return value becomes the replacement
+  — return undef to keep original, empty string to delete
+  — replace_inplace() croaks on code ref entries (use replace() instead)
 - Fix taint propagation: replace() and trim() now correctly propagate the
   taint flag from input to output (previously laundered tainted data)
 - New trim_inplace(): zero-allocation in-place whitespace trimming
