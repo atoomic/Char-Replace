@@ -14,7 +14,7 @@
 #include <XSUB.h>
 #include <embed.h>
 
-#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f')
+#define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
