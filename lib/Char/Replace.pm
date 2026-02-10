@@ -12,6 +12,19 @@ use warnings;
 
 # ABSTRACT: Perl naive XS character replacement as an alternate to substitute or transliterate
 
+use Exporter 'import';
+
+our @EXPORT_OK = qw(
+    replace
+    replace_inplace
+    trim
+    trim_inplace
+    identity_map
+    build_map
+    compile_map
+);
+
+our %EXPORT_TAGS = ( all => \@EXPORT_OK );
 
 BEGIN {
 
@@ -21,10 +34,15 @@ BEGIN {
     XSLoader::load(__PACKAGE__);
 }
 
-sub identity_map {
-    my $MAP = [];
-    $MAP->[ $_ ] = chr($_) for 0..255;
-    return $MAP; 
+sub build_map {
+    my (%pairs) = @_;
+    my @MAP;
+    for my $from ( keys %pairs ) {
+        length($from) == 1
+            or do { require Carp; Carp::croak("build_map: key must be a single character, got '$from'") };
+        $MAP[ ord($from) ] = $pairs{$from};
+    }
+    return \@MAP;
 }
 
 1;
@@ -45,11 +63,23 @@ Char::Replace
 
 XS helpers to perform some basic character replacement on strings.
 
+All functions can be called fully-qualified (C<Char::Replace::replace(...)>) or
+imported individually or as a group:
+
+    use Char::Replace qw(replace trim);        # import specific functions
+    use Char::Replace ':all';                   # import everything
+
+Nothing is exported by default.
+
 =over
 
 =item replace: replace (transliterate) one or more ASCII characters
 
+=item replace_inplace: fast in-place 1:1 character replacement (no allocation)
+
 =item trim: remove leading and trailing spaces of a string
+
+=item trim_inplace: in-place whitespace trimming (no allocation)
 
 =back
 
@@ -58,13 +88,60 @@ XS helpers to perform some basic character replacement on strings.
 =head2 $output = replace( $string, $MAP )
 
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
-Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid
+Map entries can be:
+
+=over
+
+=item a string (PV) — replaces the character with that string
+
+=item an empty string — deletes the character from the output
+
+=item an integer (IV) — replaces the character with C<chr(value)> (0–255)
+
+=item undef — keeps the original character unchanged
+
+=item a code ref — called with the character as argument; return value is the replacement
+(return undef to keep original, empty string to delete)
+
+=back
+
+When the input string has the UTF-8 flag set, multi-byte character sequences
+(bytes >= 0x80) are copied through unchanged. The replacement map is only
+applied to ASCII bytes (0x00–0x7F), preventing corruption of multi-byte
+characters whose continuation bytes might collide with map entries.
+
+B<Performance note>: when all map entries are 1:1 byte replacements (single-char
+strings, IVs, or identity), a precomputed 256-byte lookup table fast path is used,
+avoiding per-byte SV type dispatch. On long strings this can outperform C<tr///>.
+
+B<Taint safety>: when the input string is tainted (under C<-T> mode), the
+returned string is also tainted.
 
 view L</SYNOPSIS> or example just after.
 
+Setting a map entry to an empty string deletes the character from the output:
+
+    $map->[ ord('x') ] = q[];    # delete 'x'
+    Char::Replace::replace( "fox", $map ) eq "fo" or die;
+
+Setting a map entry to an integer replaces the character with chr(value):
+
+    $map->[ ord('a') ] = ord('A');  # replace 'a' with 'A'
+    Char::Replace::replace( "abc", $map ) eq "Abc" or die;
+
+Setting a map entry to a code ref enables dynamic replacement:
+
+    $map->[ ord('a') ] = sub { uc $_[0] };  # uppercase callback
+    Char::Replace::replace( "abc", $map ) eq "Abc" or die;
+
+    # stateful callback
+    my $n = 0;
+    $map->[ ord('x') ] = sub { ++$n };
+    Char::Replace::replace( "xyx", $map ) eq "1y2" or die;
+
 =head2 $map = identity_map()
 
-This is a convenient helper to initializee an ASCII mapping.
+This is a convenient helper to initialize an ASCII mapping.
 It returns an Array Ref, where every character will map to itself by default.
 
 You can then adjust one or several characters.
@@ -75,16 +152,116 @@ You can then adjust one or several characters.
     # replaces all 'a' by 'XYZ'
     Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
 
+=head2 $map = build_map( char => replacement, ... )
+
+Convenience constructor: takes a hash of single-character keys and their
+replacement values, and returns a sparse array ref suitable for C<replace()> or
+C<replace_inplace()>. Unmapped characters pass through unchanged (C<undef>
+entries in the array are treated as identity by the XS code).
+
+    my $map = Char::Replace::build_map(
+        'a' => 'AA',
+        'd' => '',       # delete
+        'x' => ord('X'), # IV
+        'z' => sub { uc $_[0] },  # callback
+    );
+    Char::Replace::replace( "abxd", $map ) eq "AAbX" or die;
+
+Croaks if any key is not exactly one character.
+
+=head2 $compiled = compile_map( $map )
+
+Pre-compiles an array ref map into an opaque object that eliminates per-call
+map parsing overhead. Returns a C<Char::Replace::CompiledMap> object that can
+be passed to C<replace()> or C<replace_inplace()> in place of the array ref.
+
+    my $map = Char::Replace::build_map( 'a' => 'A', 'e' => 'E' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    # Use in a hot loop — no per-call map setup overhead
+    for my $str (@strings) {
+        $str = Char::Replace::replace( $str, $compiled );
+    }
+
+B<Restrictions>: only maps with 1:1 byte replacements can be compiled
+(single-character strings, IV 0-255, or identity/undef entries). Maps
+containing multi-character strings, empty strings (deletion), code refs,
+or wide characters will cause a croak. Use the array ref directly with
+C<replace()> for these maps.
+
+B<Performance>: on short strings (< 100 chars), compiled maps are B<4-5x faster>
+than array-based maps. On medium strings (~300 chars), they are B<~3x faster>.
+On very long strings, the difference is marginal since the replacement loop
+itself dominates.
+
+=head2 $count = replace_inplace( $string, $MAP )
+
+Modifies C<$string> in place, applying 1:1 byte replacements from C<$MAP>.
+Returns the number of bytes actually changed.
+
+Unlike C<replace()>, this function does B<not> allocate a new string — it
+modifies the existing SV buffer directly. This restricts map entries to
+single-character replacements only:
+
+=over
+
+=item a single-character string (PV of length 1)
+
+=item an integer (IV) in range 0–255
+
+=item undef — keeps the original character unchanged
+
+=back
+
+Multi-character strings, empty strings (deletion), and code refs will cause a croak.
+Use C<replace()> when you need expansion, deletion, or dynamic callbacks.
+
+    my $map = Char::Replace::identity_map();
+    $map->[ ord('a') ] = 'A';
+
+    my $str = "abcabc";
+    my $n = Char::Replace::replace_inplace( $str, $map );
+    # $str is now "AbcAbc", $n is 2
+
+UTF-8 safety applies: multi-byte sequences are skipped, only ASCII bytes
+are eligible for replacement.
+
+B<Performance note>: C<replace_inplace()> avoids memory allocation, making it
+ideal for memory-constrained environments or when modifying a string that is
+already in a variable. However, due to CPU cache effects (reading and writing
+the same memory region), it is not necessarily faster than C<replace()> for
+raw throughput — the allocating variant writes to a separate buffer, which
+modern CPUs pipeline more efficiently. Prefer C<replace_inplace()> when you
+want to avoid allocation overhead, not when you need maximum speed.
+
 =head2 $string = trim( $string )
 
 trim removes all trailing and leading characters of a string
-Trailing and leading space characters  ' ', '\r', '\n', '\t', '\f' are removed.
+Trailing and leading space characters  ' ', '\r', '\n', '\t', '\f', '\v' (vertical tab) are removed.
 A new string is returned.
 
 The removal is performed in XS.
 We only need to look at the beginning and end of the string.
 
-The UTF-8 state of a string is preserved.
+The UTF-8 and taint state of a string is preserved.
+
+=head2 $count = trim_inplace( $string )
+
+Modifies C<$string> in place, removing leading and trailing whitespace.
+Returns the total number of whitespace bytes removed.
+
+Unlike C<trim()>, this function does B<not> allocate a new string — it
+modifies the existing SV directly. Uses C<sv_chop()> internally for
+efficient leading-whitespace removal.
+
+The same whitespace characters as C<trim()> are recognized:
+C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>, C<'\v'> (vertical tab).
+
+    my $str = "  hello world  ";
+    my $n = Char::Replace::trim_inplace( $str );
+    # $str is now "hello world", $n is 4
+
+The UTF-8 state of the string is preserved.
 
 =head1 Benchmarks
 
@@ -96,14 +273,6 @@ The UTF-8 state of a string is preserved.
 
 # EXAMPLE: examples/benchmark-trim.pl
 
-
-=head1 TODO
-
-=over
-
-=item handle IV in the map (at this time only PV are expected)
-
-=back
 
 =head1 Warnings
 
