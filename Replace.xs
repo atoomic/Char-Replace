@@ -353,9 +353,20 @@ SV *_replace_str( SV *sv, SV *map ) {
         XPUSHs( arg );
         PUTBACK;
 
-        count = call_sv( SvRV( entry ), G_SCALAR );
+        count = call_sv( SvRV( entry ), G_SCALAR | G_EVAL );
 
         SPAGAIN;
+
+        if ( SvTRUE( ERRSV ) ) {
+          /* Callback died: clean up the reply SV we allocated,
+           * then re-throw so the caller sees the original error. */
+          (void) POPs;
+          PUTBACK;
+          FREETMPS;
+          LEAVE;
+          SvREFCNT_dec(reply);
+          croak_sv( ERRSV );
+        }
 
         if ( count == 1 ) {
           result = POPs;

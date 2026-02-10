@@ -186,4 +186,25 @@ use Char::Replace;
         q[code ref at index 255: high byte replaced];
 }
 
+{
+    note "code ref that dies propagates error cleanly";
+    my @map = @{ Char::Replace::identity_map() };
+    $map[ ord('a') ] = sub { die "callback error" };
+
+    my $died = !eval { Char::Replace::replace( "abc", \@map ); 1 };
+    ok $died, q[die in callback propagates to caller];
+    like $@, qr/callback error/, q[original error message preserved];
+}
+
+{
+    note "code ref die does not leak memory (no crash after many iterations)";
+    my @map = @{ Char::Replace::identity_map() };
+    $map[ ord('a') ] = sub { die "leak test" };
+
+    for (1..1000) {
+        eval { Char::Replace::replace( "abc", \@map ) };
+    }
+    pass q[1000 die-in-callback iterations: no crash or corruption];
+}
+
 done_testing;
