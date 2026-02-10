@@ -49,4 +49,11 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
     is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];    
 }
 
+{ # trim_inplace: modify string in place (zero allocation)
+    my $str = qq[  Some spaces  \n];
+    my $removed = Char::Replace::trim_inplace( $str );
+    is $str, q[Some spaces], "trim_inplace modifies in place";
+    is $removed, 5, "5 whitespace bytes removed";
+}
+
 done_testing;
