@@ -56,4 +56,21 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
     is $removed, 5, "5 whitespace bytes removed";
 }
 
+{ # build_map: convenient map construction from key-value pairs
+    my $map = Char::Replace::build_map(
+        'a' => 'AA',
+        'd' => '',       # delete character
+        'x' => ord('X'), # integer ordinal
+    );
+    is Char::Replace::replace( q[abxd], $map ), q[AAbX], "build_map convenience constructor";
+}
+
+{ # replace_inplace: fast in-place 1:1 byte replacement
+    my $str = "hello world";
+    my $map = Char::Replace::build_map( 'o' => '0', 'l' => '1' );
+    my $count = Char::Replace::replace_inplace( $str, $map );
+    is $str, "he110 w0r1d", "replace_inplace modifies in place";
+    is $count, 5, "5 bytes changed";
+}
+
 done_testing;
