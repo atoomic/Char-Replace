@@ -12,6 +12,9 @@ Revision history for Char-Replace
   (up to 3.5x faster than replace() for long strings)
 - New build_map(): convenience constructor from char => replacement pairs
 - Perf: replace() writes directly into SV buffer (avoids temp alloc+copy)
+- Perf: precomputed 256-byte lookup table fast path for 1:1 maps in both
+  replace() and replace_inplace() — eliminates per-byte SV type dispatch;
+  replace() on long strings is now faster than Perl's tr///
 - Refactor: extract UTF8_SEQ_LEN macro for shared UTF-8 byte handling
 
 0.006     2025-11-21 16:07:16-07:00 America/Denver
