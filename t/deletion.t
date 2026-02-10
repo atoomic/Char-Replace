@@ -79,7 +79,7 @@ use Char::Replace;
 }
 
 {
-    note "deletion with high-byte characters (non-UTF-8)";
+    note "deletion with high-byte characters";
     my @map = @{ Char::Replace::identity_map() };
     $map[255] = '';
 
@@ -91,6 +91,15 @@ use Char::Replace;
     $map[128] = '';
     is Char::Replace::replace( chr(128) . "x" . chr(255), \@map ), "x",
         q[delete chars 128 and 255];
+}
+
+{
+    note "deletion preserves UTF-8 flag";
+    my @map = @{ Char::Replace::identity_map() };
+    $map[ ord('l') ] = '';
+
+    is Char::Replace::replace( "héllo", \@map ), "héo",
+        q[delete 'l' from UTF-8 string];
 }
 
 {
