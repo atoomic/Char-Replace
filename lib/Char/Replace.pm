@@ -98,6 +98,9 @@ B<Performance note>: when all map entries are 1:1 byte replacements (single-char
 strings, IVs, or identity), a precomputed 256-byte lookup table fast path is used,
 avoiding per-byte SV type dispatch. On long strings this can outperform C<tr///>.
 
+B<Taint safety>: when the input string is tainted (under C<-T> mode), the
+returned string is also tainted.
+
 view L</SYNOPSIS> or example just after.
 
 Setting a map entry to an empty string deletes the character from the output:
@@ -179,6 +182,8 @@ A new string is returned.
 
 The removal is performed in XS.
 We only need to look at the beginning and end of the string.
+
+The UTF-8 and taint state of a string is preserved.
 
 The UTF-8 state of a string is preserved.
 
