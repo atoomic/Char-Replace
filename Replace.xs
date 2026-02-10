@@ -56,29 +56,25 @@ IV _trim_inplace( pTHX_ SV *sv );
 
 /*
  * _normalize_encoding: reconcile UTF-8 state between a replacement SV
- * and the output string.  When the states differ, a temporary SV is
- * created (stored in *tmp_out) that the caller must SvREFCNT_dec.
+ * and the output string.  Temporary SVs are made mortal so they are
+ * automatically freed on scope exit (or croak), eliminating leak risk.
  *
  * Returns the PV pointer and sets *out_len.  On wide-character failure,
  * returns NULL (caller should croak with context-appropriate message).
  */
-static char *_normalize_encoding( pTHX_ SV *entry, int is_utf8, STRLEN *out_len, SV **tmp_out ) {
-  *tmp_out = NULL;
+static char *_normalize_encoding( pTHX_ SV *entry, int is_utf8, STRLEN *out_len ) {
 
   if ( !is_utf8 && SvUTF8( entry ) ) {
-    SV *tmp = newSVsv( entry );
+    SV *tmp = sv_2mortal( newSVsv( entry ) );
     if ( !sv_utf8_downgrade( tmp, TRUE ) ) {
-      SvREFCNT_dec( tmp );
       return NULL;
     }
-    *tmp_out = tmp;
     return SvPV( tmp, *out_len );
   }
 
   if ( is_utf8 && !SvUTF8( entry ) ) {
-    SV *tmp = newSVsv( entry );
+    SV *tmp = sv_2mortal( newSVsv( entry ) );
     sv_utf8_upgrade( tmp );
-    *tmp_out = tmp;
     return SvPV( tmp, *out_len );
   }
 
@@ -100,15 +96,13 @@ static int _apply_pv_replacement( pTHX_ SV *entry, int is_utf8,
                                   STRLEN *ix_p ) {
   STRLEN slen;
   char *replace;
-  SV *tmp = NULL;
 
-  replace = _normalize_encoding( aTHX_ entry, is_utf8, &slen, &tmp );
+  replace = _normalize_encoding( aTHX_ entry, is_utf8, &slen );
   if ( !replace ) {
     return -1;
   }
 
   if ( slen == 0 ) {
-    if ( tmp ) SvREFCNT_dec( tmp );
     return 0;
   }
 
@@ -121,7 +115,6 @@ static int _apply_pv_replacement( pTHX_ SV *entry, int is_utf8,
     (*str_p)[*ix_p] = replace[j];
   }
 
-  if ( tmp ) SvREFCNT_dec( tmp );
   return 1;
 }
 
@@ -484,6 +477,11 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
         count = call_sv( SvRV( entry ), G_SCALAR | G_EVAL );
 
         SPAGAIN;
+
+        /* Refresh ary/map_top: the callback may have modified the
+         * map array (push, splice, etc.), invalidating the pointer. */
+        ary = AvARRAY(mapav);
+        map_top = AvFILL(mapav);
 
         if ( SvTRUE( ERRSV ) ) {
           /* Callback died: clean up the reply SV we allocated,
