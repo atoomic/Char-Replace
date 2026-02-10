@@ -2,6 +2,13 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- UTF-8 safety: multi-byte sequences (>= 0x80) are now copied through
+  unchanged; replacement map is only applied to ASCII bytes (0x00-0x7F)
+- IV/NV map entries: integer values treated as character ordinals (chr)
+- Empty string map entries now delete the character from output
+- Fix off-by-one: map[255] is now reachable (>= vs > boundary)
+- Fix type safety: unsigned char for byte handling, STRLEN for loop vars
+
 0.006     2025-11-21 16:07:16-07:00 America/Denver
 
 - Fix compiling issue with threaded Perl versions

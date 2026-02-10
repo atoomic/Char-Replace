@@ -30,8 +30,8 @@ our ( $STR, @MAP );
     the map should be read as replace the characters X
     by the string stored at $MAP[ ord('X') ]
   
- Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1) or a string
- at this time any other value is not handled: IVs, NVs, ...
+ Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1), a string,
+ an integer (IV — treated as character ordinal), or an empty string (deletes the character).
 
 =cut
 
@@ -79,7 +79,18 @@ XS helpers to perform some basic character replacement on strings.
 ## $output = replace( $string, $MAP )
 
 Return a new string '$output' using the replacement map provided by $MAP (Array Ref).
-Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid
+Map entries can be:
+
+- a string (PV) — replaces the character with that string
+- an empty string — deletes the character from the output
+- an integer (IV) — replaces the character with `chr(value)` (0–255)
+- undef — keeps the original character unchanged
+
+Note: returns undef when '$string' is not a valid PV, return '$string' when the MAP is invalid.
+
+When the input string has the UTF-8 flag set, multi-byte character sequences
+(bytes >= 0x80) are copied through unchanged. The replacement map is only
+applied to ASCII bytes (0x00–0x7F), preventing corruption of multi-byte characters.
 
 view ["SYNOPSIS"](#synopsis) or example just after.
 
@@ -432,10 +443,6 @@ pp_trim         12350/s            --          -37%          -99%
 pp_naive_trim   19610/s           59%            --          -99%
 xs_trim       1810099/s        14556%         9130%            --
 ```
-
-# TODO
-
-- handle IV in the map (at this time only PV are expected)
 
 # Warnings
 
