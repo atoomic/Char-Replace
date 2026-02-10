@@ -37,8 +37,13 @@
 #define ENSURE_ROOM(reply, str, str_size, ix_newstr, need_bytes) \
   do { \
     if ( (str_size) <= ((ix_newstr) + (need_bytes) + 1) ) { \
-      while ( (str_size) <= ((ix_newstr) + (need_bytes) + 1) ) \
-        (str_size) *= 2; \
+      STRLEN _target = (ix_newstr) + (need_bytes) + 1; \
+      while ( (str_size) <= _target ) { \
+        STRLEN _next = (str_size) * 2; \
+        if ( _next <= (str_size) ) \
+          croak("Char::Replace: string too large to allocate"); \
+        (str_size) = _next; \
+      } \
       SvGROW( (reply), (str_size) ); \
       (str) = SvPVX(reply); \
     } \

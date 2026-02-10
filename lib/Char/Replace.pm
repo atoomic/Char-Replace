@@ -191,8 +191,6 @@ We only need to look at the beginning and end of the string.
 
 The UTF-8 and taint state of a string is preserved.
 
-The UTF-8 state of a string is preserved.
-
 =head2 $count = trim_inplace( $string )
 
 Modifies C<$string> in place, removing leading and trailing whitespace.
