@@ -29,7 +29,7 @@ our ( $STR, @MAP );
 
     the map should be read as replace the characters X
     by the string stored at $MAP[ ord('X') ]
-  
+
  Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1) or a string
  at this time any other value is not handled: IVs, NVs, ...
 
@@ -59,7 +59,7 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
 { # trim XS helper
     # remove spaces at the beginning and end of a string - XS helper
 
-    is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];    
+    is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];
 }
 
 done_testing;
@@ -132,11 +132,11 @@ our ( $STR, @MAP );
 
     # just a sample latin text
     my $latin = <<'EOS';
-Lorem ipsum dolor sit amet, accumsan patrioque mel ei. 
-Sumo temporibus ad vix, in veri urbanitas pri, rebum 
-nusquam expetendis et eum. Et movet antiopam eum, 
-an veri quas pertinax mea. Te pri propriae consequuntur, 
-te solum aeque albucius ius. 
+Lorem ipsum dolor sit amet, accumsan patrioque mel ei.
+Sumo temporibus ad vix, in veri urbanitas pri, rebum
+nusquam expetendis et eum. Et movet antiopam eum,
+an veri quas pertinax mea. Te pri propriae consequuntur,
+te solum aeque albucius ius.
 Ubique everti recusabo id sea, adhuc vitae quo ea.
 EOS
 
@@ -202,7 +202,7 @@ replace_xs      431960/s           5862%            102%              --
                 my $str = $STR;
                 $str =~ s/(.)/$MAP[ord($1)]/og;
                 return $str;
-            },            
+            },
         };
 
         # sanity check
@@ -277,11 +277,11 @@ our ($STR);
 
     # just a sample latin text
     my $latin = <<'EOS';
-Lorem ipsum dolor sit amet, accumsan patrioque mel ei. 
-Sumo temporibus ad vix, in veri urbanitas pri, rebum 
-nusquam expetendis et eum. Et movet antiopam eum, 
-an veri quas pertinax mea. Te pri propriae consequuntur, 
-te solum aeque albucius ius. 
+Lorem ipsum dolor sit amet, accumsan patrioque mel ei.
+Sumo temporibus ad vix, in veri urbanitas pri, rebum
+nusquam expetendis et eum. Et movet antiopam eum,
+an veri quas pertinax mea. Te pri propriae consequuntur,
+te solum aeque albucius ius.
 Ubique everti recusabo id sea, adhuc vitae quo ea.
 EOS
 
@@ -440,7 +440,7 @@ xs_trim       1810099/s        14556%         9130%            --
 # Warnings
 
 Be aware, that this software is still in a very alpha state at this stage.
-Use it as it, patches are welcome. 
+Use it as it, patches are welcome.
 
 # LICENSE
 
