@@ -18,6 +18,7 @@
 
 SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
+IV _replace_inplace( SV *sv, SV *map );
 
 SV *_trim_sv( SV *sv ) {
   dTHX;
@@ -176,6 +177,94 @@ SV *_replace_str( SV *sv, SV *map ) {
   return reply;
 }
 
+/*
+ * _replace_inplace: modify the SV's string buffer directly.
+ *
+ * Only supports 1:1 byte replacements: each map entry must be either
+ * undef (keep original), a single-character PV, or an IV/NV in 0-255.
+ * Entries that would expand or delete characters cause a croak.
+ *
+ * Returns the number of bytes actually changed.
+ * UTF-8 safe: multi-byte sequences (>= 0x80) are skipped.
+ */
+IV _replace_inplace( SV *sv, SV *map ) {
+  dTHX;
+  STRLEN len;
+  char *str;
+  STRLEN i;
+  AV *mapav;
+  SV **ary;
+  SSize_t map_top;
+  int is_utf8;
+  IV count = 0;
+
+  if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
+    || AvFILL( SvRV(map) ) < 0
+    ) {
+      return 0; /* no valid map, nothing to do */
+  }
+
+  /* make the SV writable (COW handling) */
+  SvPV_force_nolen(sv);
+  str = SvPVX(sv);
+  len = SvCUR(sv);
+
+  mapav = (AV *)SvRV(map);
+  ary = AvARRAY(mapav);
+  map_top = AvFILL(mapav);
+  is_utf8 = SvUTF8(sv) ? 1 : 0;
+
+  for ( i = 0; i < len; ++i ) {
+    unsigned char c = (unsigned char) str[i];
+    int ix = (int) c;
+
+    /* UTF-8 safety: skip multi-byte sequences */
+    if ( is_utf8 && c >= 0x80 ) {
+      STRLEN seq_len = 1;
+      if      ( c >= 0xFC ) seq_len = 6;
+      else if ( c >= 0xF8 ) seq_len = 5;
+      else if ( c >= 0xF0 ) seq_len = 4;
+      else if ( c >= 0xE0 ) seq_len = 3;
+      else if ( c >= 0xC0 ) seq_len = 2;
+      if ( i + seq_len > len ) seq_len = len - i;
+      i += seq_len - 1; /* -1 because the loop increments */
+      continue;
+    }
+
+    if ( ix > map_top || !ary[ix] )
+      continue;
+
+    {
+      SV *entry = ary[ix];
+      if ( SvPOK( entry ) ) {
+        STRLEN slen;
+        char *replace = SvPV( entry, slen );
+        if ( slen == 1 ) {
+          if ( str[i] != replace[0] ) {
+            str[i] = replace[0];
+            ++count;
+          }
+        } else {
+          croak("replace_inplace: map entry for byte %d is a %"UVuf"-char string"
+                " (only single-char replacements allowed)", ix, (UV)slen);
+        }
+      } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
+        IV val = SvIV( entry );
+        if ( val >= 0 && val <= 255 ) {
+          if ( str[i] != (char) val ) {
+            str[i] = (char) val;
+            ++count;
+          }
+        }
+        /* out-of-range: keep original */
+      }
+    }
+  }
+
+  SvSETMAGIC(sv);
+  return count;
+}
+
 MODULE = Char__Replace       PACKAGE = Char::Replace
 
 SV*
@@ -199,6 +288,19 @@ CODE:
      RETVAL = _trim_sv( sv );
   } else {
      RETVAL = &PL_sv_undef;
+  }
+OUTPUT:
+  RETVAL
+
+IV
+replace_inplace(sv, map)
+  SV *sv;
+  SV *map;
+CODE:
+  if ( sv && SvPOK(sv) ) {
+     RETVAL = _replace_inplace( sv, map );
+  } else {
+     RETVAL = 0;
   }
 OUTPUT:
   RETVAL

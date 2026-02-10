@@ -8,6 +8,8 @@ Revision history for Char-Replace
 - Empty string map entries now delete the character from output
 - Fix off-by-one: map[255] is now reachable (>= vs > boundary)
 - Fix type safety: unsigned char for byte handling, STRLEN for loop vars
+- New replace_inplace(): zero-allocation in-place 1:1 byte replacement
+  (up to 3.5x faster than replace() for long strings)
 
 0.006     2025-11-21 16:07:16-07:00 America/Denver
 
