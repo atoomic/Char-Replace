@@ -2,6 +2,8 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- Fix taint propagation: replace() and trim() now correctly propagate the
+  taint flag from input to output (previously laundered tainted data)
 - New trim_inplace(): zero-allocation in-place whitespace trimming
   (modifies string directly, returns count of bytes removed)
 - UTF-8 safety: multi-byte sequences (>= 0x80) are now copied through
