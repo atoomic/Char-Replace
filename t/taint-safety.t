@@ -13,6 +13,11 @@ use Test2::Plugin::NoWarnings;
 use Char::Replace;
 use Scalar::Util qw(tainted);
 
+# Taint propagation requires Perl 5.18+ due to internal taint handling differences
+if ($] < 5.018) {
+    plan skip_all => 'Taint propagation tests require Perl 5.18+';
+}
+
 sub taint { substr($ENV{PATH}, 0, 0) . $_[0] }
 sub fresh_map { @{ Char::Replace::identity_map() } }
 
