@@ -54,6 +54,37 @@ SV *_trim_sv( pTHX_ SV *sv );
 IV _replace_inplace( pTHX_ SV *sv, SV *map );
 IV _trim_inplace( pTHX_ SV *sv );
 
+/*
+ * _normalize_encoding: reconcile UTF-8 state between a replacement SV
+ * and the output string.  When the states differ, a temporary SV is
+ * created (stored in *tmp_out) that the caller must SvREFCNT_dec.
+ *
+ * Returns the PV pointer and sets *out_len.  On wide-character failure,
+ * returns NULL (caller should croak with context-appropriate message).
+ */
+static char *_normalize_encoding( pTHX_ SV *entry, int is_utf8, STRLEN *out_len, SV **tmp_out ) {
+  *tmp_out = NULL;
+
+  if ( !is_utf8 && SvUTF8( entry ) ) {
+    SV *tmp = newSVsv( entry );
+    if ( !sv_utf8_downgrade( tmp, TRUE ) ) {
+      SvREFCNT_dec( tmp );
+      return NULL;
+    }
+    *tmp_out = tmp;
+    return SvPV( tmp, *out_len );
+  }
+
+  if ( is_utf8 && !SvUTF8( entry ) ) {
+    SV *tmp = newSVsv( entry );
+    sv_utf8_upgrade( tmp );
+    *tmp_out = tmp;
+    return SvPV( tmp, *out_len );
+  }
+
+  return SvPV( entry, *out_len );
+}
+
 #define COMPILED_MAP_CLASS "Char::Replace::CompiledMap"
 
 /*
@@ -373,39 +404,18 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
       if ( SvPOK( entry ) ) {
         STRLEN slen;
         char *replace;
-        SV *downgraded = NULL;
+        SV *tmp = NULL;
 
-        /*
-         * Encoding normalization: when the map entry and the output
-         * have different UTF-8 states, we must reconcile them.
-         *
-         * - UTF-8 entry + non-UTF-8 output: downgrade the entry so
-         *   codepoints 0-255 become single Latin-1 bytes (matching
-         *   Perl's tr/// behavior). Wide chars (>255) cause a croak.
-         *
-         * - Non-UTF-8 entry + UTF-8 output: upgrade the entry so
-         *   bytes 128-255 become proper 2-byte UTF-8 sequences.
-         */
-        if ( !is_utf8 && SvUTF8( entry ) ) {
-          downgraded = newSVsv( entry );
-          if ( !sv_utf8_downgrade( downgraded, TRUE ) ) {
-            SvREFCNT_dec( downgraded );
-            SvREFCNT_dec( reply );
-            croak("Char::Replace: map entry for byte %d contains a wide character"
-                  " (>255) that cannot be used with a non-UTF-8 input string", ix);
-          }
-          replace = SvPV( downgraded, slen );
-        } else if ( is_utf8 && !SvUTF8( entry ) ) {
-          downgraded = newSVsv( entry );
-          sv_utf8_upgrade( downgraded );
-          replace = SvPV( downgraded, slen );
-        } else {
-          replace = SvPV( entry, slen );
+        replace = _normalize_encoding( aTHX_ entry, is_utf8, &slen, &tmp );
+        if ( !replace ) {
+          SvREFCNT_dec( reply );
+          croak("Char::Replace: map entry for byte %d contains a wide character"
+                " (>255) that cannot be used with a non-UTF-8 input string", ix);
         }
 
         if ( slen == 0  ) {
           --ix_newstr; /* undo the default write: delete the character */
-          if ( downgraded ) SvREFCNT_dec( downgraded );
+          if ( tmp ) SvREFCNT_dec( tmp );
           continue;
         } else {
           STRLEN j;
@@ -420,7 +430,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
           /* handle the last character */
           str[ix_newstr] = replace[j];
         }
-        if ( downgraded ) SvREFCNT_dec( downgraded );
+        if ( tmp ) SvREFCNT_dec( tmp );
       } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
         /* IV/NV support: treat the integer value as an ordinal (chr) */
         IV val = SvIV( entry );
@@ -469,27 +479,16 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
           if ( SvOK( result ) ) {
             STRLEN slen;
             char *replace;
-            SV *normalized = NULL;
+            SV *tmp = NULL;
 
-            /* Encoding normalization for coderef results */
-            if ( !is_utf8 && SvUTF8( result ) ) {
-              normalized = newSVsv( result );
-              if ( !sv_utf8_downgrade( normalized, TRUE ) ) {
-                SvREFCNT_dec( normalized );
-                PUTBACK;
-                FREETMPS;
-                LEAVE;
-                SvREFCNT_dec( reply );
-                croak("Char::Replace: coderef for byte %d returned a wide character"
-                      " (>255) that cannot be used with a non-UTF-8 input string", ix);
-              }
-              replace = SvPV( normalized, slen );
-            } else if ( is_utf8 && !SvUTF8( result ) ) {
-              normalized = newSVsv( result );
-              sv_utf8_upgrade( normalized );
-              replace = SvPV( normalized, slen );
-            } else {
-              replace = SvPV( result, slen );
+            replace = _normalize_encoding( aTHX_ result, is_utf8, &slen, &tmp );
+            if ( !replace ) {
+              PUTBACK;
+              FREETMPS;
+              LEAVE;
+              SvREFCNT_dec( reply );
+              croak("Char::Replace: coderef for byte %d returned a wide character"
+                    " (>255) that cannot be used with a non-UTF-8 input string", ix);
             }
 
             if ( slen == 0 ) {
@@ -503,7 +502,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
                 str[ix_newstr++] = replace[j];
               str[ix_newstr] = replace[j];
             }
-            if ( normalized ) SvREFCNT_dec( normalized );
+            if ( tmp ) SvREFCNT_dec( tmp );
           }
           /* undef result: keep original (already written) */
         }

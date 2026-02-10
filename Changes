@@ -7,6 +7,8 @@ Revision history for Char-Replace
   Nothing is exported by default (backwards compatible)
 - New compile_map(): pre-compile a 1:1 byte map into an opaque lookup table;
   skips per-call AV iteration — 4-5x faster on short strings vs array maps
+- Refactor: extract _normalize_encoding helper to DRY the UTF-8 encoding
+  reconciliation logic shared between PV map entries and coderef results
 - Refactor: extract _apply_fast_map and _apply_fast_map_inplace helpers to
   share the replacement loop between ad-hoc and compiled fast paths
 - Fix: accept non-PV inputs (integers, floats, tied scalars, overloaded objects);
