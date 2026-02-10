@@ -538,6 +538,8 @@ IV _replace_inplace( pTHX_ SV *sv, SV *map ) {
 
 MODULE = Char__Replace       PACKAGE = Char::Replace
 
+PROTOTYPES: DISABLE
+
 SV*
 replace(sv, map)
   SV *sv;
