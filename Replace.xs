@@ -139,6 +139,21 @@ static const char *_is_compiled_map( pTHX_ SV *map ) {
 }
 
 /*
+ * _fast_map_safe_for_utf8: check whether a 256-byte lookup table is safe
+ * for use with UTF-8 strings.  Returns 0 (unsafe) if any ASCII position
+ * (0-127) maps to a byte >= 0x80, since that byte would need multi-byte
+ * UTF-8 encoding that the fast path cannot provide.
+ */
+static int _fast_map_safe_for_utf8( const char fast_map[256] ) {
+  int i;
+  for ( i = 0; i < 128; ++i ) {
+    if ( (unsigned char) fast_map[i] >= 0x80 )
+      return 0;
+  }
+  return 1;
+}
+
+/*
  * _build_fast_map: populate a 256-byte identity lookup table, then
  * overwrite entries according to the Perl map array.
  *
@@ -806,11 +821,10 @@ CODE:
   map_top = AvFILL(mapav);
 
   /*
-   * Build the fast map with is_utf8=0.  This is the conservative choice:
-   * entries with high bytes are decoded from UTF-8 to Latin-1 if possible.
-   * At runtime, the same table works for both UTF-8 and non-UTF-8 inputs
-   * because bytes >= 0x80 are identity-mapped and multi-byte sequences
-   * are skipped in UTF-8 mode.
+   * Build the fast map with is_utf8=0.  This builds for non-UTF-8
+   * inputs; the subsequent _fast_map_safe_for_utf8 check ensures the
+   * table is also safe for UTF-8 strings (no ASCII byte maps to a
+   * value >= 0x80 that would need multi-byte encoding).
    *
    * If any entry is not fast-path eligible (multi-char, coderef, deletion),
    * we croak — compile_map only supports 1:1 byte maps.
@@ -819,6 +833,17 @@ CODE:
     croak("compile_map: map contains entries not eligible for compilation"
           " (multi-char strings, empty strings, code refs, or wide characters);"
           " use the array ref directly with replace() for these maps");
+  }
+
+  /* Reject maps that map ASCII bytes to high bytes (>= 0x80).
+   * Such maps would produce malformed UTF-8 when applied to UTF-8
+   * strings, because the fast path inserts raw bytes without encoding.
+   * Users should use the array ref directly for these maps. */
+  if ( !_fast_map_safe_for_utf8( fast_map ) ) {
+    croak("compile_map: map contains ASCII-to-high-byte entries"
+          " (an ASCII byte maps to a value >= 0x80) which cannot be safely"
+          " used with UTF-8 strings; use the array ref directly with"
+          " replace() for encoding-aware replacement");
   }
 
   /* Store the 256-byte table in a PV SV, blessed into CompiledMap */

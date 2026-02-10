@@ -105,6 +105,15 @@ subtest 'compiled map rejects non-eligible maps' => sub {
             qr/must be a non-empty array ref/,
             'rejects empty array ref';
     }
+
+    # ASCII byte mapping to high byte (>= 0x80)
+    {
+        my @map;
+        $map[ ord('a') ] = chr(0xE9);  # Latin-1 é
+        like dies { Char::Replace::compile_map(\@map) },
+            qr/ASCII-to-high-byte/,
+            'rejects ASCII-to-high-byte mapping (would corrupt UTF-8)';
+    }
 };
 
 subtest 'compiled map with UTF-8 input' => sub {

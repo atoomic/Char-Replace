@@ -187,8 +187,10 @@ be passed to C<replace()> or C<replace_inplace()> in place of the array ref.
 B<Restrictions>: only maps with 1:1 byte replacements can be compiled
 (single-character strings, IV 0-255, or identity/undef entries). Maps
 containing multi-character strings, empty strings (deletion), code refs,
-or wide characters will cause a croak. Use the array ref directly with
-C<replace()> for these maps.
+or wide characters will cause a croak. Additionally, maps where an ASCII
+byte (0-127) maps to a value >= 0x80 are rejected because such entries
+would produce malformed UTF-8 when applied to UTF-8 strings. Use the
+array ref directly with C<replace()> for these maps.
 
 B<Performance>: on short strings (< 100 chars), compiled maps are B<4-5x faster>
 than array-based maps. On medium strings (~300 chars), they are B<~3x faster>.
