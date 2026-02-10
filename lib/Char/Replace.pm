@@ -276,8 +276,10 @@ The UTF-8 state of the string is preserved.
 
 =head1 Warnings
 
-Be aware, that this software is still in a very alpha state at this stage.
-Use it as it, patches are welcome. 
+This module operates at the byte level. While UTF-8 multi-byte sequences are
+safely passed through (only ASCII bytes 0x00–0x7F are subject to replacement),
+be mindful of encoding when working with non-ASCII content. Contributions and
+bug reports are welcome.
 
 =head1 LICENSE
 

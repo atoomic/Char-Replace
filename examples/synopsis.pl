@@ -8,6 +8,10 @@ use Test2::Tools::Explain;
 
 use Char::Replace;
 
+# functions can also be imported for convenience:
+#   use Char::Replace qw(replace trim build_map);
+#   use Char::Replace ':all';  # import everything
+
 our ( $STR, @MAP );
 
 =pod
@@ -17,8 +21,8 @@ our ( $STR, @MAP );
     the map should be read as replace the characters X
     by the string stored at $MAP[ ord('X') ]
   
- Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1) or a string
- at this time any other value is not handled: IVs, NVs, ...
+ Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1), a string,
+ an integer (IV — treated as character ordinal), or an empty string (deletes the character).
 
 =cut
 
@@ -47,6 +51,41 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
     # remove spaces at the beginning and end of a string - XS helper
 
     is Char::Replace::trim( qq[ Some spaces in this string.\n\r\n] ), q[Some spaces in this string.];    
+}
+
+{ # trim_inplace: modify string in place (zero allocation)
+    my $str = qq[  Some spaces  \n];
+    my $removed = Char::Replace::trim_inplace( $str );
+    is $str, q[Some spaces], "trim_inplace modifies in place";
+    is $removed, 5, "5 whitespace bytes removed";
+}
+
+{ # build_map: convenient map construction from key-value pairs
+    my $map = Char::Replace::build_map(
+        'a' => 'AA',
+        'd' => '',       # delete character
+        'x' => ord('X'), # integer ordinal
+    );
+    is Char::Replace::replace( q[abxd], $map ), q[AAbX], "build_map convenience constructor";
+}
+
+{ # replace_inplace: fast in-place 1:1 byte replacement
+    my $str = "hello world";
+    my $map = Char::Replace::build_map( 'o' => '0', 'l' => '1' );
+    my $count = Char::Replace::replace_inplace( $str, $map );
+    is $str, "he110 w0r1d", "replace_inplace modifies in place";
+    is $count, 5, "5 bytes changed";
+}
+
+{ # compile_map: pre-compile a map for repeated use in hot paths
+    my $map = Char::Replace::build_map( 'a' => 'A', 'e' => 'E' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    # compiled map works with both replace() and replace_inplace()
+    is Char::Replace::replace( 'apple', $compiled ), 'ApplE', "compiled map replace";
+    my $str = 'eagle';
+    Char::Replace::replace_inplace( $str, $compiled );
+    is $str, 'EAglE', "compiled map replace_inplace";
 }
 
 done_testing;
