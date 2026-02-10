@@ -92,6 +92,10 @@ When the input string has the UTF-8 flag set, multi-byte character sequences
 applied to ASCII bytes (0x00–0x7F), preventing corruption of multi-byte
 characters whose continuation bytes might collide with map entries.
 
+B<Performance note>: when all map entries are 1:1 byte replacements (single-char
+strings, IVs, or identity), a precomputed 256-byte lookup table fast path is used,
+avoiding per-byte SV type dispatch. On long strings this can outperform C<tr///>.
+
 view L</SYNOPSIS> or example just after.
 
 Setting a map entry to an empty string deletes the character from the output:
@@ -139,9 +143,8 @@ Modifies C<$string> in place, applying 1:1 byte replacements from C<$MAP>.
 Returns the number of bytes actually changed.
 
 Unlike C<replace()>, this function does B<not> allocate a new string — it
-modifies the existing SV buffer directly. This makes it significantly faster
-(up to 3.5x for long strings) but restricts map entries to single-character
-replacements only:
+modifies the existing SV buffer directly. This restricts map entries to
+single-character replacements only:
 
 =over
 
