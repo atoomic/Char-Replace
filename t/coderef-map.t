@@ -11,9 +11,11 @@ use Test2::Plugin::NoWarnings;
 
 use Char::Replace;
 
+sub fresh_map { @{ Char::Replace::identity_map() } }
+
 {
     note "basic code ref: uppercase via callback";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { uc $_[0] };
 
     is Char::Replace::replace( "abcd", \@map ), "Abcd",
@@ -22,7 +24,7 @@ use Char::Replace;
 
 {
     note "code ref returning multi-char string (expansion)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { "[$_[0]]" };
 
     is Char::Replace::replace( "abcd", \@map ), "[a]bcd",
@@ -31,7 +33,7 @@ use Char::Replace;
 
 {
     note "code ref returning empty string (deletion)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('b') ] = sub { "" };
 
     is Char::Replace::replace( "abcd", \@map ), "acd",
@@ -40,7 +42,7 @@ use Char::Replace;
 
 {
     note "code ref returning undef (keep original)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { undef };
 
     is Char::Replace::replace( "abcd", \@map ), "abcd",
@@ -49,7 +51,7 @@ use Char::Replace;
 
 {
     note "multiple code ref entries";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { uc $_[0] };
     $map[ ord('d') ] = sub { uc $_[0] };
 
@@ -59,7 +61,7 @@ use Char::Replace;
 
 {
     note "code ref mixed with PV and IV entries";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { "X" };      # code ref
     $map[ ord('b') ] = 'Y';              # PV
     $map[ ord('c') ] = ord('Z');          # IV
@@ -71,7 +73,7 @@ use Char::Replace;
 
 {
     note "code ref on every character";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     for my $c ( 'a' .. 'z' ) {
         $map[ ord($c) ] = sub { uc $_[0] };
     }
@@ -83,7 +85,7 @@ use Char::Replace;
 {
     note "code ref receives correct character";
     my @seen;
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('x') ] = sub { push @seen, $_[0]; $_[0] };
 
     Char::Replace::replace( "xyx", \@map );
@@ -92,7 +94,7 @@ use Char::Replace;
 
 {
     note "code ref on empty string";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { "X" };
 
     is Char::Replace::replace( "", \@map ), "",
@@ -101,7 +103,7 @@ use Char::Replace;
 
 {
     note "code ref with long string (buffer growth)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { "AAAA" };
 
     my $input  = "a" x 100;
@@ -113,7 +115,7 @@ use Char::Replace;
 
 {
     note "code ref with UTF-8 string: ASCII chars replaced, multi-byte preserved";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('h') ] = sub { uc $_[0] };
 
     is Char::Replace::replace( "héllo", \@map ), "Héllo",
@@ -129,7 +131,7 @@ use Char::Replace;
 
 {
     note "replace_inplace: code ref entry croaks";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { "X" };
 
     my $str = "abcd";
@@ -140,7 +142,7 @@ use Char::Replace;
 
 {
     note "code ref returning single char (1:1 replacement)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { "X" };
 
     is Char::Replace::replace( "aaa", \@map ), "XXX",
@@ -150,7 +152,7 @@ use Char::Replace;
 {
     note "stateful code ref (counter)";
     my $count = 0;
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { ++$count; "A$count" };
 
     is Char::Replace::replace( "abab", \@map ), "A1bA2b",
@@ -159,7 +161,7 @@ use Char::Replace;
 
 {
     note "code ref with no map entries (identity behavior)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
 
     is Char::Replace::replace( "hello", \@map ), "hello",
         q[no code ref entries: identity];
@@ -167,7 +169,7 @@ use Char::Replace;
 
 {
     note "code ref at boundary: map index 0 (null byte)";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[0] = sub { "NULL" };
 
     my $input = "a\0b";
@@ -177,13 +179,34 @@ use Char::Replace;
 
 {
     note "code ref at boundary: map index 255";
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[255] = sub { "FF" };
 
     my $input = "a" . chr(255) . "b";
     utf8::downgrade($input);
     is Char::Replace::replace( $input, \@map ), "aFFb",
         q[code ref at index 255: high byte replaced];
+}
+
+{
+    note "code ref that dies propagates error cleanly";
+    my @map = fresh_map();
+    $map[ ord('a') ] = sub { die "callback error" };
+
+    my $died = !eval { Char::Replace::replace( "abc", \@map ); 1 };
+    ok $died, q[die in callback propagates to caller];
+    like $@, qr/callback error/, q[original error message preserved];
+}
+
+{
+    note "code ref die does not leak memory (no crash after many iterations)";
+    my @map = fresh_map();
+    $map[ ord('a') ] = sub { die "leak test" };
+
+    for (1..1000) {
+        eval { Char::Replace::replace( "abc", \@map ) };
+    }
+    pass q[1000 die-in-callback iterations: no crash or corruption];
 }
 
 done_testing;

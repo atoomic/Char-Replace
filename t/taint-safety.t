@@ -13,10 +13,8 @@ use Test2::Plugin::NoWarnings;
 use Char::Replace;
 use Scalar::Util qw(tainted);
 
-# Helper: create a tainted string
-sub taint {
-    return substr($ENV{PATH}, 0, 0) . $_[0];
-}
+sub taint { substr($ENV{PATH}, 0, 0) . $_[0] }
+sub fresh_map { @{ Char::Replace::identity_map() } }
 
 {
     note "replace(): taint propagation";
@@ -25,7 +23,7 @@ sub taint {
     ok tainted($t), q[input is tainted];
 
     # Fast path (identity map, 1:1)
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     my $r = Char::Replace::replace($t, \@map);
     ok tainted($r), q[replace: fast path (identity) preserves taint];
 
@@ -55,7 +53,7 @@ sub taint {
 {
     note "replace(): non-tainted input stays clean";
 
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = 'X';
 
     my $r = Char::Replace::replace("abcdef", \@map);
@@ -94,7 +92,7 @@ sub taint {
 {
     note "replace_inplace(): taint preserved (was already correct)";
 
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = 'X';
 
     my $t = taint("abcabc");
@@ -113,7 +111,7 @@ sub taint {
 {
     note "replace(): taint with UTF-8 string";
 
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('h') ] = 'H';
 
     my $t = taint("héllo");
@@ -132,7 +130,7 @@ sub taint {
 {
     note "replace(): taint with code ref map entry";
 
-    my @map = @{ Char::Replace::identity_map() };
+    my @map = fresh_map();
     $map[ ord('a') ] = sub { uc $_[0] };
 
     my $t = taint("abcd");
