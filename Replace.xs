@@ -32,6 +32,48 @@ SV *_replace_str( SV *sv, SV *map );
 SV *_trim_sv( SV *sv );
 IV _replace_inplace( SV *sv, SV *map );
 
+/*
+ * _build_fast_map: populate a 256-byte identity lookup table, then
+ * overwrite entries according to the Perl map array.
+ *
+ * Returns 1 if every map entry is a 1:1 byte replacement (fast-path
+ * eligible).  Returns 0 if any entry requires expansion, deletion,
+ * or is otherwise incompatible — the caller should fall through to
+ * the general path.
+ */
+static int _build_fast_map( char fast_map[256], SV **ary, SSize_t map_top ) {
+  dTHX;
+  int ix;
+  SSize_t scan_top = map_top < 255 ? map_top : 255;
+
+  for ( ix = 0; ix < 256; ++ix )
+    fast_map[ix] = (char) ix;
+
+  for ( ix = 0; ix <= scan_top; ++ix ) {
+    SV *entry;
+    if ( !ary[ix] )
+      continue;
+    entry = ary[ix];
+    if ( SvPOK( entry ) ) {
+      STRLEN slen;
+      char *pv = SvPV( entry, slen );
+      if ( slen == 1 ) {
+        fast_map[ix] = pv[0];
+      } else {
+        return 0;
+      }
+    } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
+      IV val = SvIV( entry );
+      if ( val >= 0 && val <= 255 ) {
+        fast_map[ix] = (char) val;
+      }
+      /* out-of-range: keep identity (already set) */
+    }
+    /* undef/other: identity (already set) */
+  }
+  return 1;
+}
+
 SV *_trim_sv( SV *sv ) {
   dTHX;
   STRLEN len  = SvCUR(sv);
@@ -96,41 +138,8 @@ SV *_replace_str( SV *sv, SV *map ) {
    */
   {
     char fast_map[256];
-    int can_fast_path = 1;
-    int ix;
-    SSize_t scan_top = map_top < 255 ? map_top : 255;
 
-    /* initialize identity */
-    for ( ix = 0; ix < 256; ++ix )
-      fast_map[ix] = (char) ix;
-
-    /* scan map entries to build the lookup table */
-    for ( ix = 0; ix <= scan_top; ++ix ) {
-      SV *entry;
-      if ( !ary[ix] )
-        continue;
-      entry = ary[ix];
-      if ( SvPOK( entry ) ) {
-        STRLEN slen;
-        char *pv = SvPV( entry, slen );
-        if ( slen == 1 ) {
-          fast_map[ix] = pv[0];
-        } else {
-          /* multi-char or deletion: can't use fast path */
-          can_fast_path = 0;
-          break;
-        }
-      } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
-        IV val = SvIV( entry );
-        if ( val >= 0 && val <= 255 ) {
-          fast_map[ix] = (char) val;
-        }
-        /* out-of-range: keep identity (already set) */
-      }
-      /* undef/other: identity (already set) */
-    }
-
-    if ( can_fast_path ) {
+    if ( _build_fast_map( fast_map, ary, map_top ) ) {
       reply = newSV( len + 1 );
       SvPOK_on(reply);
       str = SvPVX(reply);
@@ -139,6 +148,9 @@ SV *_replace_str( SV *sv, SV *map ) {
         /* tight loop: no SV dispatch, no UTF-8 checks */
         for ( i = 0; i < len; ++i )
           str[i] = fast_map[(unsigned char) src[i]];
+
+        str[len] = '\0';
+        SvCUR_set(reply, len);
       } else {
         /* UTF-8 aware fast path: use table for ASCII, copy multi-byte sequences */
         STRLEN out = 0;
@@ -156,11 +168,11 @@ SV *_replace_str( SV *sv, SV *map ) {
             str[out] = fast_map[c];
           }
         }
-        i = out; /* final output length */
+
+        str[out] = '\0';
+        SvCUR_set(reply, out);
       }
 
-      str[i] = '\0';
-      SvCUR_set(reply, i);
       if ( SvUTF8(sv) )
         SvUTF8_on(reply);
       return reply;
@@ -309,37 +321,8 @@ IV _replace_inplace( SV *sv, SV *map ) {
    */
   {
     char fast_map[256];
-    int can_fast_path = 1;
-    int ix;
-    SSize_t scan_top = map_top < 255 ? map_top : 255;
 
-    for ( ix = 0; ix < 256; ++ix )
-      fast_map[ix] = (char) ix;
-
-    for ( ix = 0; ix <= scan_top; ++ix ) {
-      SV *entry;
-      if ( !ary[ix] )
-        continue;
-      entry = ary[ix];
-      if ( SvPOK( entry ) ) {
-        STRLEN slen;
-        char *pv = SvPV( entry, slen );
-        if ( slen == 1 ) {
-          fast_map[ix] = pv[0];
-        } else {
-          /* multi-char or deletion: must use general path to croak */
-          can_fast_path = 0;
-          break;
-        }
-      } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
-        IV val = SvIV( entry );
-        if ( val >= 0 && val <= 255 ) {
-          fast_map[ix] = (char) val;
-        }
-      }
-    }
-
-    if ( can_fast_path ) {
+    if ( _build_fast_map( fast_map, ary, map_top ) ) {
       if ( !is_utf8 ) {
         for ( i = 0; i < len; ++i ) {
           char replacement = fast_map[(unsigned char) str[i]];
@@ -415,7 +398,8 @@ IV _replace_inplace( SV *sv, SV *map ) {
     }
   }
 
-  SvSETMAGIC(sv);
+  if ( count )
+    SvSETMAGIC(sv);
   return count;
 }
 
