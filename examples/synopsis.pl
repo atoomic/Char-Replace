@@ -17,8 +17,8 @@ our ( $STR, @MAP );
     the map should be read as replace the characters X
     by the string stored at $MAP[ ord('X') ]
   
- Note: the value stored $MAP[ ord('X') ] can be a single char (string length=1) or a string
- at this time any other value is not handled: IVs, NVs, ...
+ Note: the value stored $MAP[ ord('X') ] can be a single char, a string,
+ an integer (IV, treated as ordinal), a code ref (callback), or undef (identity)
 
 =cut
 
