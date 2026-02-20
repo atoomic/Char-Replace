@@ -78,6 +78,43 @@ jobs:
       - run: make test
 
 ###
+### Threaded Perl (validates PERL_NO_GET_CONTEXT + pTHX_ safety)
+###
+
+  linux-threaded:
+    runs-on: ubuntu-latest
+    name: "perl ${{ matrix.perl-version }} (threaded)"
+
+    needs:
+      - ubuntu-system-perl
+
+    strategy:
+      fail-fast: false
+      matrix:
+        perl-version:
+          - "5.36"
+          - "5.40"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl-version }}
+          multi-thread: true
+      - run: perl -V | grep -i thread
+      - name: install deps using cpm
+        uses: perl-actions/install-with-cpm@v1
+        with:
+          sudo: false
+          cpanfile: "cpanfile"
+          args: "--with-all"
+      - name: Set PERL5LIB to local lib
+        run: echo "PERL5LIB=$(pwd)/local/lib/perl5" >> $GITHUB_ENV
+      - run: perl Makefile.PL
+      - run: make
+      - run: make test
+
+###
 ### linux testing multiple Perl versions
 ###
 
