@@ -52,23 +52,40 @@ Char::Replace sample usage
 
 =head1 DESCRIPTION
 
-Char::Replace
+Char::Replace provides XS-accelerated character-level string operations as
+an alternative to Perl's C<tr///> and C<s///> operators. All core functions
+are implemented in C for maximum performance.
 
-XS helpers to perform some basic character replacement on strings.
+For simple 1:1 character maps, C<replace()> uses a precomputed 256-byte
+lookup table (fast path) that avoids per-character type dispatch entirely,
+making it roughly 2x faster than C<tr///>. When map entries include
+multi-character expansions, deletions, or code ref callbacks, it falls back
+to a general path that handles all cases.
 
 =over
 
-=item replace: replace (transliterate) one or more ASCII characters
+=item B<replace> — transliterate one or more ASCII characters. Supports
+single-char, multi-char expansion, deletion (empty string), integer
+ordinals (IV), and code ref callbacks.
 
-=item replace_inplace: fast in-place 1:1 character replacement (no allocation)
+=item B<replace_inplace> — fast in-place 1:1 byte replacement with no
+allocation. Up to 3.5x faster than C<replace()> for long strings when only
+single-byte substitutions are needed.
 
-=item replace_list: batch replacement across an array of strings (one map setup)
+=item B<replace_list> — batch replacement across an array of strings (map
+built once).
 
-=item trim: remove leading and trailing spaces of a string
+=item B<trim> / B<trim_inplace> — strip leading and trailing whitespace.
 
-=item trim_inplace: in-place whitespace trimming (no allocation)
+=item B<identity_map> / B<build_map> — convenient helpers for constructing
+replacement maps.
 
 =back
+
+B<UTF-8 safe:> multi-byte sequences (bytes E<gt>= 0x80) are copied through
+unchanged; the map is applied to ASCII bytes only.
+
+B<Taint safe:> the taint flag is propagated from input to output.
 
 =head1 Available functions
 
@@ -253,15 +270,14 @@ The UTF-8 state of the string is preserved.
 
 # EXAMPLE: examples/benchmark-replace.pl
 
+=head2 fast path vs replace_inplace
+
+# EXAMPLE: examples/benchmark-fastpath.pl
+
 =head2 trim
 
 # EXAMPLE: examples/benchmark-trim.pl
 
-
-=head1 Warnings
-
-Be aware, that this software is still in a very alpha state at this stage.
-Use it as it, patches are welcome. 
 
 =head1 LICENSE
 
