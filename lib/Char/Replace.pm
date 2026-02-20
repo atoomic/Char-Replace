@@ -130,7 +130,7 @@ You can then adjust one or several characters.
     $map->[ ord('a') ] = q[XYZ]; # replace 'a' by 'XYZ'
 
     # replaces all 'a' by 'XYZ'
-    Char::Replace::replace( "abcdabcd" ) eq "XYZbcdXYZbcd" or die;
+    Char::Replace::replace( "abcdabcd", $map ) eq "XYZbcdXYZbcd" or die;
 
 =head2 $map = build_map( char => replacement, ... )
 
