@@ -79,7 +79,7 @@ subtest 'replace() general path: concurrent expansion maps' => sub {
 
             for my $i (1 .. $ITERATIONS) {
                 my $input  = "axbyc";
-                my $expect = "aXXc";      # x→XX, y→deleted, rest identity
+                my $expect = "aXXbc";     # x→XX, y→deleted, b preserved (identity)
 
                 my $got = Char::Replace::replace($input, $map);
                 unless (defined $got && $got eq $expect) {
@@ -170,7 +170,7 @@ subtest 'trim_inplace() concurrent threads' => sub {
                 my $expect = "hello";
 
                 my $count = Char::Replace::trim_inplace($str);
-                unless ($str eq $expect && $count == 7) {
+                unless ($str eq $expect && $count == 8) {
                     push @errors, "thread=$tid iter=$i: str='$str' count=$count";
                     last;
                 }
