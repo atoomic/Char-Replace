@@ -62,6 +62,8 @@ XS helpers to perform some basic character replacement on strings.
 
 =item replace_inplace: fast in-place 1:1 character replacement (no allocation)
 
+=item replace_list: batch replacement across an array of strings (one map setup)
+
 =item trim: remove leading and trailing spaces of a string
 
 =item trim_inplace: in-place whitespace trimming (no allocation)
@@ -180,10 +182,29 @@ Use C<replace()> when you need expansion, deletion, or dynamic callbacks.
 UTF-8 safety applies: multi-byte sequences are skipped, only ASCII bytes
 are eligible for replacement.
 
+=head2 @results = replace_list( \@strings, $MAP )
+
+Batch version of C<replace()>: applies the same replacement map to every
+string in the input array. Returns a list of replaced strings.
+
+    my $map = Char::Replace::build_map( 'a' => 'X', 'b' => 'Y' );
+    my @results = Char::Replace::replace_list( \@strings, $map );
+
+This is more efficient than calling C<replace()> in a loop because the
+replacement map is analysed once and reused across all strings. When the
+map is eligible for the fast path (1:1 byte replacements), the 256-byte
+lookup table is built once instead of per call.
+
+Input elements that are C<undef> or references produce C<undef> in the
+output. Numeric values are coerced to strings.
+
+Croaks if the first argument is not an array reference.
+
 =head2 $string = trim( $string )
 
-trim removes all trailing and leading characters of a string
-Trailing and leading space characters  ' ', '\r', '\n', '\t', '\f' are removed.
+trim removes all trailing and leading characters of a string.
+Trailing and leading space characters C<' '>, C<'\r'>, C<'\n'>, C<'\t'>,
+C<'\f'>, C<'\v'> are removed.
 A new string is returned.
 
 The removal is performed in XS.
@@ -201,7 +222,7 @@ modifies the existing SV directly. Uses C<sv_chop()> internally for
 efficient leading-whitespace removal.
 
 The same whitespace characters as C<trim()> are recognized:
-C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>.
+C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>, C<'\v'>.
 
     my $str = "  hello world  ";
     my $n = Char::Replace::trim_inplace( $str );

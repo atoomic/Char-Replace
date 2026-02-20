@@ -27,6 +27,7 @@ Requires: Test2::Bundle::Extended, Test2::Tools::Explain, Test2::Plugin::NoWarni
 |----------|-----------|-----------|-------------|
 | `replace($str, $map)` | Yes (new SV) | PV, IV, coderef, undef, empty string | General replacement |
 | `replace_inplace($str, $map)` | No | PV(len=1), IV, undef | In-place 1:1 replacement |
+| `replace_list(\@strs, $map)` | Yes (new SVs) | PV, IV, coderef, undef, empty string | Batch replacement (map built once) |
 | `trim($str)` | Yes (new SV) | N/A | Strip leading/trailing whitespace |
 | `trim_inplace($str)` | No | N/A | In-place whitespace stripping |
 | `identity_map()` | Yes | N/A | Returns 256-entry identity array |
