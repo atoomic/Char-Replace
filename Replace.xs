@@ -9,6 +9,7 @@
 *
 */
 
+#define PERL_NO_GET_CONTEXT
 #include <EXTERN.h>
 #include <perl.h>
 #include <XSUB.h>
@@ -36,16 +37,16 @@
 #define croak_sv(sv) croak("%s", SvPV_nolen(sv))
 #endif
 
-SV *_replace_str( SV *sv, SV *map );
-SV *_trim_sv( SV *sv );
-IV _replace_inplace( SV *sv, SV *map );
-IV _trim_inplace( SV *sv );
+SV *_replace_str( pTHX_ SV *sv, SV *map );
+SV *_trim_sv( pTHX_ SV *sv );
+IV _replace_inplace( pTHX_ SV *sv, SV *map );
+IV _trim_inplace( pTHX_ SV *sv );
 
 /*
  * ensure_buffer_space: grow the buffer if needed to accommodate additional bytes.
  * Returns the updated string pointer (SvGROW may relocate).
  */
-static inline char *ensure_buffer_space(SV *sv, STRLEN *str_size, STRLEN needed) {
+static inline char *ensure_buffer_space(pTHX_ SV *sv, STRLEN *str_size, STRLEN needed) {
   if (*str_size <= needed) {
     while (*str_size <= needed) {
       *str_size *= 2;
@@ -77,8 +78,7 @@ static inline STRLEN copy_replacement(char *str, STRLEN ix, const char *replace,
  * or is otherwise incompatible — the caller should fall through to
  * the general path.
  */
-static int _build_fast_map( char fast_map[256], SV **ary, SSize_t map_top ) {
-  dTHX;
+static int _build_fast_map( pTHX_ char fast_map[256], SV **ary, SSize_t map_top ) {
   int ix;
   SSize_t scan_top = map_top < 255 ? map_top : 255;
 
@@ -114,8 +114,7 @@ static int _build_fast_map( char fast_map[256], SV **ary, SSize_t map_top ) {
   return 1;
 }
 
-SV *_trim_sv( SV *sv ) {
-  dTHX;
+SV *_trim_sv( pTHX_ SV *sv ) {
   STRLEN len  = SvCUR(sv);
   char *str = SvPVX(sv);
   char *end;
@@ -154,8 +153,7 @@ SV *_trim_sv( SV *sv ) {
  * Uses sv_chop() to advance past leading whitespace efficiently,
  * and adjusts SvCUR for trailing whitespace.
  */
-IV _trim_inplace( SV *sv ) {
-  dTHX;
+IV _trim_inplace( pTHX_ SV *sv ) {
   STRLEN len;
   char *str;
   char *end;
@@ -199,8 +197,7 @@ IV _trim_inplace( SV *sv ) {
 }
 
 
-SV *_replace_str( SV *sv, SV *map ) {
-  dTHX;
+SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   STRLEN len;
   char *src;
   STRLEN        i = 0;
@@ -239,7 +236,7 @@ SV *_replace_str( SV *sv, SV *map ) {
   {
     char fast_map[256];
 
-    if ( _build_fast_map( fast_map, ary, map_top ) ) {
+    if ( _build_fast_map( aTHX_ fast_map, ary, map_top ) ) {
       reply = newSV( len + 1 );
       SvPOK_on(reply);
       str = SvPVX(reply);
@@ -340,7 +337,7 @@ SV *_replace_str( SV *sv, SV *map ) {
           --ix_newstr;
           continue;
         } else {
-          str = ensure_buffer_space(reply, &str_size, ix_newstr + slen + 1);
+          str = ensure_buffer_space(aTHX_ reply, &str_size, ix_newstr + slen + 1);
           ix_newstr = copy_replacement(str, ix_newstr, replace, slen);
         }
       } else if ( SvIOK( entry ) || SvNOK( entry ) ) {
@@ -400,7 +397,7 @@ SV *_replace_str( SV *sv, SV *map ) {
             if ( slen == 0 ) {
               --ix_newstr;
             } else {
-              str = ensure_buffer_space(reply, &str_size, ix_newstr + slen + 1);
+              str = ensure_buffer_space(aTHX_ reply, &str_size, ix_newstr + slen + 1);
               ix_newstr = copy_replacement(str, ix_newstr, replace, slen);
             }
           }
@@ -433,8 +430,7 @@ SV *_replace_str( SV *sv, SV *map ) {
  * Returns the number of bytes actually changed.
  * UTF-8 safe: multi-byte sequences (>= 0x80) are skipped.
  */
-IV _replace_inplace( SV *sv, SV *map ) {
-  dTHX;
+IV _replace_inplace( pTHX_ SV *sv, SV *map ) {
   STRLEN len;
   char *str;
   STRLEN i;
@@ -468,7 +464,7 @@ IV _replace_inplace( SV *sv, SV *map ) {
   {
     char fast_map[256];
 
-    if ( _build_fast_map( fast_map, ary, map_top ) ) {
+    if ( _build_fast_map( aTHX_ fast_map, ary, map_top ) ) {
       if ( !is_utf8 ) {
         for ( i = 0; i < len; ++i ) {
           char replacement = fast_map[(unsigned char) str[i]];
@@ -554,13 +550,15 @@ IV _replace_inplace( SV *sv, SV *map ) {
 
 MODULE = Char__Replace       PACKAGE = Char::Replace
 
+PROTOTYPES: DISABLE
+
 SV*
 replace(sv, map)
   SV *sv;
   SV *map;
 CODE:
   if ( sv && SvPOK(sv) ) {
-     RETVAL = _replace_str( sv, map );
+     RETVAL = _replace_str( aTHX_ sv, map );
   } else {
      RETVAL = &PL_sv_undef;
   }
@@ -572,7 +570,7 @@ trim(sv)
   SV *sv;
 CODE:
   if ( sv && SvPOK(sv) ) {
-     RETVAL = _trim_sv( sv );
+     RETVAL = _trim_sv( aTHX_ sv );
   } else {
      RETVAL = &PL_sv_undef;
   }
@@ -585,7 +583,7 @@ replace_inplace(sv, map)
   SV *map;
 CODE:
   if ( sv && SvPOK(sv) ) {
-     RETVAL = _replace_inplace( sv, map );
+     RETVAL = _replace_inplace( aTHX_ sv, map );
   } else {
      RETVAL = 0;
   }
@@ -597,7 +595,7 @@ trim_inplace(sv)
   SV *sv;
 CODE:
   if ( sv && SvPOK(sv) ) {
-     RETVAL = _trim_inplace( sv );
+     RETVAL = _trim_inplace( aTHX_ sv );
   } else {
      RETVAL = 0;
   }
