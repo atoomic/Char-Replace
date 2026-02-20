@@ -202,31 +202,48 @@ Croaks if the first argument is not an array reference.
 
 =head2 $string = trim( $string )
 
-trim removes all trailing and leading characters of a string.
-Trailing and leading space characters C<' '>, C<'\r'>, C<'\n'>, C<'\t'>,
-C<'\f'>, C<'\v'> are removed.
-A new string is returned.
+=head2 $string = trim( $string, $chars )
 
-The removal is performed in XS.
-We only need to look at the beginning and end of the string.
+Removes leading and trailing characters from a string and returns a new string.
 
-The UTF-8 state of a string is preserved.
+When called with a single argument, removes the default whitespace characters:
+C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>, C<'\v'>.
+
+When called with a second argument C<$chars>, only removes characters present
+in that string. Each byte in C<$chars> is treated as a character to trim.
+An empty C<$chars> string means "trim nothing".
+
+    Char::Replace::trim("  hello  ")           eq "hello"    or die;
+    Char::Replace::trim("xxhelloxx", "x")      eq "hello"    or die;
+    Char::Replace::trim("..a.b.c..", ".")      eq "a.b.c"    or die;
+    Char::Replace::trim("00123400", "0")       eq "1234"     or die;
+    Char::Replace::trim("xyhelloyx", "xy")     eq "hello"    or die;
+
+The UTF-8 state of the string is preserved. Only ASCII bytes are eligible
+for trimming; multi-byte UTF-8 sequences are never affected.
 
 =head2 $count = trim_inplace( $string )
 
-Modifies C<$string> in place, removing leading and trailing whitespace.
-Returns the total number of whitespace bytes removed.
+=head2 $count = trim_inplace( $string, $chars )
+
+Modifies C<$string> in place, removing leading and trailing characters.
+Returns the total number of bytes removed.
+
+When called with a single argument, removes the default whitespace characters
+(same set as C<trim()>). When called with C<$chars>, only removes characters
+present in that string.
 
 Unlike C<trim()>, this function does B<not> allocate a new string — it
-modifies the existing SV directly. Uses C<sv_chop()> internally for
-efficient leading-whitespace removal.
-
-The same whitespace characters as C<trim()> are recognized:
-C<' '>, C<'\r'>, C<'\n'>, C<'\t'>, C<'\f'>, C<'\v'>.
+modifies the existing SV buffer directly. Uses C<sv_chop()> internally for
+efficient leading-character removal.
 
     my $str = "  hello world  ";
     my $n = Char::Replace::trim_inplace( $str );
     # $str is now "hello world", $n is 4
+
+    my $csv = ",,value,,";
+    my $n2 = Char::Replace::trim_inplace( $csv, "," );
+    # $csv is now "value", $n2 is 4
 
 The UTF-8 state of the string is preserved.
 
