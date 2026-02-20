@@ -602,3 +602,92 @@ CODE:
   }
 OUTPUT:
   RETVAL
+
+void
+replace_list(strings_ref, map)
+  SV *strings_ref;
+  SV *map;
+PPCODE:
+{
+  AV *strings;
+  SSize_t i, num_strings;
+  int is_fast = 0;
+  char fast_map[256];
+  AV *mapav = NULL;
+  SV **map_ary = NULL;
+  SSize_t map_top = -1;
+
+  if ( !strings_ref || !SvROK(strings_ref)
+       || SvTYPE(SvRV(strings_ref)) != SVt_PVAV )
+    croak("replace_list: first argument must be an array reference");
+
+  strings = (AV *)SvRV(strings_ref);
+  num_strings = av_len(strings) + 1;
+
+  /* Precompute the fast map once for all strings */
+  if ( map && SvROK(map) && SvTYPE(SvRV(map)) == SVt_PVAV
+       && AvFILL(SvRV(map)) >= 0 ) {
+    mapav = (AV *)SvRV(map);
+    map_ary = AvARRAY(mapav);
+    map_top = AvFILL(mapav);
+    is_fast = _build_fast_map( aTHX_ fast_map, map_ary, map_top );
+  }
+
+  EXTEND(SP, num_strings);
+
+  for ( i = 0; i < num_strings; ++i ) {
+    SV **elem = av_fetch(strings, i, 0);
+
+    if ( !elem || !SvOK(*elem) || SvROK(*elem) ) {
+      PUSHs( &PL_sv_undef );
+      continue;
+    }
+
+    if ( is_fast ) {
+      /* Fast path: apply precomputed 256-byte lookup table */
+      STRLEN len;
+      char *src = SvPV(*elem, len);
+      int is_utf8 = SvUTF8(*elem) ? 1 : 0;
+      SV *reply;
+      char *str;
+
+      reply = newSV( len + 1 );
+      SvPOK_on(reply);
+      str = SvPVX(reply);
+
+      if ( !is_utf8 ) {
+        STRLEN j;
+        for ( j = 0; j < len; ++j )
+          str[j] = fast_map[(unsigned char) src[j]];
+        str[len] = '\0';
+        SvCUR_set(reply, len);
+      } else {
+        STRLEN j, out = 0;
+        for ( j = 0; j < len; ++j, ++out ) {
+          unsigned char c = (unsigned char) src[j];
+          if ( c >= 0x80 ) {
+            STRLEN seq_len = UTF8_SEQ_LEN(c);
+            STRLEN k;
+            if ( j + seq_len > len ) seq_len = len - j;
+            for ( k = 0; k < seq_len; ++k )
+              str[out + k] = src[j + k];
+            j += seq_len - 1;
+            out += seq_len - 1;
+          } else {
+            str[out] = fast_map[c];
+          }
+        }
+        str[out] = '\0';
+        SvCUR_set(reply, out);
+      }
+
+      if ( is_utf8 )
+        SvUTF8_on(reply);
+      PROPAGATE_TAINT(*elem, reply);
+      PUSHs( sv_2mortal(reply) );
+    } else {
+      /* General path: delegate to _replace_str per element */
+      PUSHs( sv_2mortal( _replace_str( aTHX_ *elem, map ) ) );
+    }
+  }
+}
