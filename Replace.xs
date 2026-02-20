@@ -32,8 +32,9 @@
 #define IS_CODEREF(sv) (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV)
 #define PROPAGATE_TAINT(from, to) do { if (SvTAINTED(from)) SvTAINTED_on(to); } while (0)
 
-/* croak_sv was introduced in Perl 5.18; provide fallback for older versions */
-#if PERL_VERSION < 18
+/* croak_sv was introduced in Perl 5.18; provide fallback for older versions.
+ * Check PERL_REVISION to stay future-proof (Perl 7+ will have croak_sv). */
+#if PERL_REVISION == 5 && PERL_VERSION < 18
 #define croak_sv(sv) croak("%s", SvPV_nolen(sv))
 #endif
 
@@ -115,8 +116,8 @@ static int _build_fast_map( pTHX_ char fast_map[256], SV **ary, SSize_t map_top 
 }
 
 SV *_trim_sv( pTHX_ SV *sv ) {
-  STRLEN len  = SvCUR(sv);
-  char *str = SvPVX(sv);
+  STRLEN len;
+  char *str = SvPV(sv, len);
   char *end;
   SV *reply;
 
@@ -557,7 +558,7 @@ replace(sv, map)
   SV *sv;
   SV *map;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && SvOK(sv) && !SvROK(sv) ) {
      RETVAL = _replace_str( aTHX_ sv, map );
   } else {
      RETVAL = &PL_sv_undef;
@@ -569,7 +570,7 @@ SV*
 trim(sv)
   SV *sv;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && SvOK(sv) && !SvROK(sv) ) {
      RETVAL = _trim_sv( aTHX_ sv );
   } else {
      RETVAL = &PL_sv_undef;
@@ -582,7 +583,7 @@ replace_inplace(sv, map)
   SV *sv;
   SV *map;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && SvOK(sv) && !SvROK(sv) ) {
      RETVAL = _replace_inplace( aTHX_ sv, map );
   } else {
      RETVAL = 0;
@@ -594,7 +595,7 @@ IV
 trim_inplace(sv)
   SV *sv;
 CODE:
-  if ( sv && SvPOK(sv) ) {
+  if ( sv && SvOK(sv) && !SvROK(sv) ) {
      RETVAL = _trim_inplace( aTHX_ sv );
   } else {
      RETVAL = 0;
