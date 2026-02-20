@@ -166,6 +166,30 @@ pass through unchanged.
 
 Croaks if any key is not exactly one character.
 
+=head2 $compiled = compile_map( $MAP )
+
+Precompile a replacement map into an optimized 256-byte lookup table.
+Returns a C<Char::Replace::CompiledMap> object that can be passed to
+C<replace()> or C<replace_inplace()> in place of a regular map arrayref.
+
+This avoids rebuilding the lookup table on every call — significant
+performance win when applying the same map to many strings in a loop.
+
+    my $map = Char::Replace::build_map( 'a' => 'b', 'c' => 'd' );
+    my $compiled = Char::Replace::compile_map( $map );
+
+    # Hot loop: no per-call overhead for map analysis
+    for my $str (@strings) {
+        my $result = Char::Replace::replace( $str, $compiled );
+        ...
+    }
+
+B<Restrictions:> The map must be eligible for the fast path — every entry
+must be a single-character PV, an IV in 0–255, or undef (identity).
+Maps containing coderefs, multi-character strings, or empty strings
+(deletion) will cause a croak. Use C<replace()> with a regular map
+for those cases.
+
 =head2 $count = replace_inplace( $string, $MAP )
 
 Modifies C<$string> in place, applying 1:1 byte replacements from C<$MAP>.
