@@ -754,11 +754,8 @@ PPCODE:
 {
   AV *strings;
   SSize_t i, num_strings;
-  int is_fast = 0;
+  const char *fast_map_ptr = NULL;
   char fast_map[256];
-  AV *mapav = NULL;
-  SV **map_ary = NULL;
-  SSize_t map_top = -1;
 
   if ( !strings_ref || !SvROK(strings_ref)
        || SvTYPE(SvRV(strings_ref)) != SVt_PVAV )
@@ -767,13 +764,20 @@ PPCODE:
   strings = (AV *)SvRV(strings_ref);
   num_strings = av_len(strings) + 1;
 
-  /* Precompute the fast map once for all strings */
-  if ( map && SvROK(map) && SvTYPE(SvRV(map)) == SVt_PVAV
+  /* Check for compiled map first (precomputed 256-byte lookup) */
+  {
+    char *compiled = _is_compiled_map(aTHX_ map);
+    if ( compiled )
+      fast_map_ptr = compiled;
+  }
+
+  /* Build fast map from array if not already compiled */
+  if ( !fast_map_ptr && map && SvROK(map)
+       && SvTYPE(SvRV(map)) == SVt_PVAV
        && AvFILL(SvRV(map)) >= 0 ) {
-    mapav = (AV *)SvRV(map);
-    map_ary = AvARRAY(mapav);
-    map_top = AvFILL(mapav);
-    is_fast = _build_fast_map( aTHX_ fast_map, map_ary, map_top );
+    AV *mapav = (AV *)SvRV(map);
+    if ( _build_fast_map( aTHX_ fast_map, AvARRAY(mapav), AvFILL(mapav) ) )
+      fast_map_ptr = fast_map;
   }
 
   EXTEND(SP, num_strings);
@@ -786,48 +790,13 @@ PPCODE:
       continue;
     }
 
-    if ( is_fast ) {
-      /* Fast path: apply precomputed 256-byte lookup table */
+    if ( fast_map_ptr ) {
+      /* Fast path: use precomputed lookup table via shared helper */
       STRLEN len;
       char *src = SvPV(*elem, len);
       int is_utf8 = SvUTF8(*elem) ? 1 : 0;
-      SV *reply;
-      char *str;
-
-      reply = newSV( len + 1 );
-      SvPOK_on(reply);
-      str = SvPVX(reply);
-
-      if ( !is_utf8 ) {
-        STRLEN j;
-        for ( j = 0; j < len; ++j )
-          str[j] = fast_map[(unsigned char) src[j]];
-        str[len] = '\0';
-        SvCUR_set(reply, len);
-      } else {
-        STRLEN j, out = 0;
-        for ( j = 0; j < len; ++j, ++out ) {
-          unsigned char c = (unsigned char) src[j];
-          if ( c >= 0x80 ) {
-            STRLEN seq_len = UTF8_SEQ_LEN(c);
-            STRLEN k;
-            if ( j + seq_len > len ) seq_len = len - j;
-            for ( k = 0; k < seq_len; ++k )
-              str[out + k] = src[j + k];
-            j += seq_len - 1;
-            out += seq_len - 1;
-          } else {
-            str[out] = fast_map[c];
-          }
-        }
-        str[out] = '\0';
-        SvCUR_set(reply, out);
-      }
-
-      if ( is_utf8 )
-        SvUTF8_on(reply);
-      PROPAGATE_TAINT(*elem, reply);
-      PUSHs( sv_2mortal(reply) );
+      PUSHs( sv_2mortal(
+        _apply_fast_map(aTHX_ src, len, fast_map_ptr, is_utf8, *elem) ) );
     } else {
       /* General path: delegate to _replace_str per element */
       PUSHs( sv_2mortal( _replace_str( aTHX_ *elem, map ) ) );
