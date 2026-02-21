@@ -14,7 +14,6 @@
 #include <perl.h>
 #include <XSUB.h>
 #include "ppport.h"
-#include <embed.h>
 
 #define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
 
