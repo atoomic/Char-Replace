@@ -231,4 +231,93 @@ use Char::Replace;
     is $results[2], "Xab",  "string 1ab replaced";
 }
 
+# === Compiled map support ===
+
+{
+    note "compiled map: fast-path (1:1 replacements)";
+    my $map = Char::Replace::build_map( 'a' => 'X', 'b' => 'Y' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["aaa", "bbb", "abc", "xyz"], $compiled );
+    is scalar @results, 4, "4 results returned";
+    is $results[0], "XXX",  "compiled: all a -> X";
+    is $results[1], "YYY",  "compiled: all b -> Y";
+    is $results[2], "XYc",  "compiled: mixed replacement";
+    is $results[3], "xyz",  "compiled: no-match pass-through";
+}
+
+{
+    note "compiled map: equivalence with regular map";
+    my $map = Char::Replace::build_map(
+        'a' => 'A', 'e' => 'E', 'i' => 'I', 'o' => 'O', 'u' => 'U',
+    );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @inputs = ("hello world", "the quick brown fox", "aeiou", "", "no vowels");
+    my @list_compiled = Char::Replace::replace_list( \@inputs, $compiled );
+    my @list_regular  = Char::Replace::replace_list( \@inputs, $map );
+    for my $i (0 .. $#inputs) {
+        is $list_compiled[$i], $list_regular[$i],
+            "compiled matches regular for: " . quotemeta($inputs[$i]);
+    }
+}
+
+{
+    note "compiled map: UTF-8 strings";
+    my $map = Char::Replace::build_map( 'a' => 'X' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["café", "naïf", "abc"], $compiled );
+    is $results[0], "cXfé", "compiled UTF-8: café -> cXfé";
+    is $results[1], "nXïf", "compiled UTF-8: naïf -> nXïf";
+    is $results[2], "Xbc",   "compiled ASCII: abc -> Xbc";
+}
+
+{
+    note "compiled map: undef and ref elements";
+    my $map = Char::Replace::build_map( 'a' => 'X' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["abc", undef, [1,2], "xyz"], $compiled );
+    is scalar @results, 4,     "4 results";
+    is $results[0], "Xbc",    "string replaced";
+    is $results[1], undef,    "undef -> undef";
+    is $results[2], undef,    "ref -> undef";
+    is $results[3], "xyz",    "pass-through";
+}
+
+{
+    note "compiled map: empty array";
+    my $map = Char::Replace::build_map( 'a' => 'X' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( [], $compiled );
+    is scalar @results, 0, "compiled + empty array -> empty results";
+}
+
+{
+    note "compiled map: large batch";
+    my $map = Char::Replace::build_map( 'a' => 'Z' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @inputs = map { "a" x $_ } 1 .. 50;
+    my @results = Char::Replace::replace_list( \@inputs, $compiled );
+    is scalar @results, 50, "50 results";
+    for my $i (0 .. 49) {
+        is $results[$i], "Z" x ($i + 1),
+            "compiled batch element $i" or last;
+    }
+}
+
+{
+    note "compiled map: IV entries";
+    my $map = Char::Replace::identity_map();
+    $map->[ord('a')] = ord('Z');
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["abc", "axa"], $compiled );
+    is $results[0], "Zbc",  "compiled IV: a -> Z";
+    is $results[1], "ZxZ",  "compiled IV: axa";
+}
+
 done_testing;
