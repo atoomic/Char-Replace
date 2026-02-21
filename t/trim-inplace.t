@@ -204,6 +204,30 @@ use Char::Replace;
 }
 
 {
+    note "vertical tab (\\v / 0x0B)";
+    my $str = "\x0Bhello\x0B";
+    my $count = Char::Replace::trim_inplace($str);
+    is $str,   "hello", q[vertical tabs trimmed];
+    is $count, 2,       q[2 vertical tabs removed];
+}
+
+{
+    note "vertical tab mixed with other whitespace";
+    my $str = "\x0B\t\n hello \r\f\x0B";
+    my $count = Char::Replace::trim_inplace($str);
+    is $str,   "hello", q[mixed ws with vertical tab trimmed];
+    is $count, 8,       q[8 bytes removed (mixed ws + vtab)];
+}
+
+{
+    note "all-vertical-tab string";
+    my $str = "\x0B\x0B\x0B";
+    my $count = Char::Replace::trim_inplace($str);
+    is $str,   "", q[all-vtab -> empty];
+    is $count, 3,  q[3 vertical tabs removed];
+}
+
+{
     note "null bytes in string";
     my $str = "  \0hello\0  ";
     my $count = Char::Replace::trim_inplace($str);
