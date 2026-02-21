@@ -2,6 +2,37 @@ Revision history for Char-Replace
 
 {{$NEXT}}
 
+- Fix: UTF-8 safety for trim/trim_inplace with custom charset — bytes
+  >= 0x80 are now excluded from trimming to prevent corruption of
+  multi-byte sequences (e.g. trimming "é" no longer damages "ã" which
+  shares lead byte 0xC3)
+- New: compile_map($map) — precompute 256-byte lookup table for repeated
+  map use; avoids per-call map analysis overhead in tight loops
+- New: replace_list(\@strings, $map) — batch replacement across arrays
+  (map analysed once, fast path shared across all elements)
+- New: custom trim characters — trim($str, $chars) and
+  trim_inplace($str, $chars) accept optional charset parameter
+- Fix: use SvROK() instead of SvTYPE()==SVt_RV for reference checks
+  (fixes incorrect handling of weakened references)
+- Fix: accept non-string defined values via SvOK && !SvROK input
+  coercion (integers, floats now auto-stringify instead of silent no-op)
+- Perf: PERL_NO_GET_CONTEXT + pTHX_ calling convention for thread
+  optimization (no per-call interpreter lookup)
+- Perf: DRY refactoring of fast-path helpers (_apply_fast_map,
+  _apply_fast_map_inplace) shared by replace, replace_inplace,
+  replace_list, and compile_map
+- Build: add ppport.h v3.73 for portable backward compat (croak_sv
+  fallback for Perl < 5.18)
+- Build: remove redundant embed.h include (avoids macro redefinition
+  warnings on Perl 5.42+)
+- C89 portability: replace // comments with /* */, fix mixed
+  declarations
+- Test: thread safety tests (4 threads × 200 iterations per function)
+- Test: stress tests (74 assertions), taint coverage, guard clause
+  coverage, edge cases
+- Docs: improve DESCRIPTION, fix POD omissions (vertical tab, identity_map
+  example), remove stale alpha warning and outdated Todo
+
 0.007     2026-02-10 11:42:03-07:00 America/Denver
 
 - New: code ref (callback) map entries for dynamic replacement in replace()

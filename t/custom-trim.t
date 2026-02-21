@@ -326,4 +326,193 @@ use Char::Replace;
     is $count, 0, "0 on second trim";
 }
 
+# --- UTF-8 safety: non-ASCII bytes in custom charset ---
+
+{
+    note "trim: UTF-8 safety with non-ASCII custom charset";
+
+    # "ã" (U+00E3) = \xC3\xA3 in UTF-8
+    # "é" (U+00E9) = \xC3\xA9 in UTF-8
+    # They share lead byte \xC3 but are different characters.
+    # Trimming "é" from a string starting with "ã" must NOT corrupt
+    # the multi-byte sequence by stripping the shared \xC3 byte.
+
+    my $str = "\xC3\xA3hello\xC3\xA3";
+    utf8::decode($str);
+    my $charset = "\xC3\xA9";
+    utf8::decode($charset);
+
+    is Char::Replace::trim($str, $charset), $str,
+        "non-matching non-ASCII charset: UTF-8 string unchanged";
+}
+
+{
+    note "trim: UTF-8 safety - matching non-ASCII trim char skipped";
+
+    # Even when the trim char matches, individual bytes >= 0x80
+    # must not be trimmed to avoid splitting multi-byte sequences.
+    my $str = "\xC3\xA9hello\xC3\xA9";  # éhelloé
+    utf8::decode($str);
+    my $charset = "\xC3\xA9";  # é
+    utf8::decode($charset);
+
+    is Char::Replace::trim($str, $charset), $str,
+        "matching non-ASCII charset: not trimmed (UTF-8 safety)";
+}
+
+{
+    note "trim: ASCII charset on UTF-8 string still works";
+
+    my $str = "xx\xC3\xA9helloxx";  # xxéhelloxx
+    utf8::decode($str);
+    my $expected = "\xC3\xA9hello";
+    utf8::decode($expected);
+
+    is Char::Replace::trim($str, "x"), $expected,
+        "ASCII trim chars work correctly on UTF-8 string";
+}
+
+{
+    note "trim: non-ASCII edges with ASCII charset";
+
+    my $str = "\xC3\xA9hello\xC3\xA9";  # éhelloé
+    utf8::decode($str);
+
+    is Char::Replace::trim($str, "x"), $str,
+        "non-ASCII edges untouched by ASCII charset";
+}
+
+{
+    note "trim: mixed ASCII and non-ASCII at edges";
+
+    # "xéhellox" — only the ASCII 'x' should be trimmed
+    my $str = "x\xC3\xA9hellox";
+    utf8::decode($str);
+    my $expected = "\xC3\xA9hello";
+    utf8::decode($expected);
+
+    is Char::Replace::trim($str, "x"), $expected,
+        "leading ASCII trimmed, trailing ASCII trimmed, non-ASCII preserved";
+}
+
+{
+    note "trim: default whitespace on UTF-8 string with non-ASCII content";
+
+    my $str = "  \xC3\xA9hello\xC3\xA3  ";
+    utf8::decode($str);
+    my $expected = "\xC3\xA9hello\xC3\xA3";
+    utf8::decode($expected);
+
+    is Char::Replace::trim($str), $expected,
+        "default whitespace trim preserves interior non-ASCII";
+}
+
+{
+    note "trim: CJK characters not affected by non-ASCII charset";
+
+    # "日" (U+65E5) = \xE6\x97\xA5 in UTF-8 (3 bytes)
+    my $str = "\xE6\x97\xA5hello\xE6\x97\xA5";
+    utf8::decode($str);
+    my $charset = "\xC3\xA9";  # é
+    utf8::decode($charset);
+
+    is Char::Replace::trim($str, $charset), $str,
+        "CJK edges unchanged by unrelated non-ASCII charset";
+}
+
+{
+    note "trim: 4-byte emoji at edges";
+
+    # Emoji "😀" (U+1F600) = \xF0\x9F\x98\x80 in UTF-8
+    my $str = "\xF0\x9F\x98\x80hello\xF0\x9F\x98\x80";
+    utf8::decode($str);
+    my $charset = "\xC3\xA9";
+    utf8::decode($charset);
+
+    is Char::Replace::trim($str, $charset), $str,
+        "emoji edges unchanged by non-ASCII charset";
+}
+
+# --- trim_inplace: UTF-8 safety ---
+
+{
+    note "trim_inplace: UTF-8 safety with non-ASCII custom charset";
+
+    my $str = "\xC3\xA3hello\xC3\xA3";  # ãhelloã
+    utf8::decode($str);
+    my $original = $str;
+    my $charset = "\xC3\xA9";  # é
+    utf8::decode($charset);
+
+    my $count = Char::Replace::trim_inplace($str, $charset);
+    is $str, $original, "non-matching non-ASCII charset: string unchanged in-place";
+    is $count, 0, "zero bytes removed";
+}
+
+{
+    note "trim_inplace: matching non-ASCII charset skipped";
+
+    my $str = "\xC3\xA9hello\xC3\xA9";  # éhelloé
+    utf8::decode($str);
+    my $original = $str;
+    my $charset = "\xC3\xA9";  # é
+    utf8::decode($charset);
+
+    my $count = Char::Replace::trim_inplace($str, $charset);
+    is $str, $original, "matching non-ASCII charset: not trimmed in-place (UTF-8 safety)";
+    is $count, 0, "zero bytes removed";
+}
+
+{
+    note "trim_inplace: ASCII charset on UTF-8 string";
+
+    my $str = "xx\xC3\xA9helloxx";
+    utf8::decode($str);
+    my $expected = "\xC3\xA9hello";
+    utf8::decode($expected);
+
+    my $count = Char::Replace::trim_inplace($str, "x");
+    is $str, $expected, "ASCII trim works on UTF-8 string in-place";
+    is $count, 4, "4 ASCII bytes removed";
+}
+
+{
+    note "trim_inplace: mixed edges";
+
+    my $str = "x\xC3\xA9hellox";
+    utf8::decode($str);
+    my $expected = "\xC3\xA9hello";
+    utf8::decode($expected);
+
+    my $count = Char::Replace::trim_inplace($str, "x");
+    is $str, $expected, "mixed edges: ASCII trimmed, non-ASCII preserved in-place";
+    is $count, 2, "2 ASCII bytes removed";
+}
+
+{
+    note "consistency: trim and trim_inplace agree on UTF-8 + non-ASCII charset";
+
+    my @tests = (
+        ["\xC3\xA3hello\xC3\xA3", "\xC3\xA9"],  # ãhelloã / é
+        ["\xC3\xA9hello\xC3\xA9", "\xC3\xA9"],  # éhelloé / é
+        ["xx\xC3\xA9helloxx",     "x"],           # ASCII charset
+        ["x\xC3\xA9hellox",       "x"],           # mixed edges
+        ["\xE6\x97\xA5hello\xE6\x97\xA5", "\xC3\xA9"],  # CJK / é
+    );
+
+    for my $test (@tests) {
+        my ($raw, $raw_charset) = @$test;
+        my $input = $raw;
+        utf8::decode($input);
+        my $cs = $raw_charset;
+        utf8::decode($cs);
+
+        my $expected = Char::Replace::trim($input, $cs);
+        my $str = $input;
+        Char::Replace::trim_inplace($str, $cs);
+        is $str, $expected,
+            "trim_inplace matches trim for UTF-8 string with non-ASCII charset";
+    }
+}
+
 done_testing;
