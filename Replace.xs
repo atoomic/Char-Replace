@@ -153,6 +153,7 @@ SV *_trim_sv( pTHX_ SV *sv, const char *trim_set ) {
   char *str = SvPV(sv, len);
   char *end;
   SV *reply;
+  int is_utf8 = SvUTF8(sv) ? 1 : 0;
 
   if ( len == 0 ) {
     reply = newSVpvn_flags( str, 0, SvUTF8(sv) );
@@ -162,14 +163,21 @@ SV *_trim_sv( pTHX_ SV *sv, const char *trim_set ) {
 
   end = str + len - 1;
 
-  /* Skip trim characters at front */
-  while ( len > 0 && SHOULD_TRIM( *str, trim_set ) ) {
+  /* Skip trim characters at front.
+   * UTF-8 safety: bytes >= 0x80 are part of multi-byte sequences
+   * and must not be trimmed individually. */
+  while ( len > 0
+          && !(is_utf8 && (unsigned char)*str >= 0x80)
+          && SHOULD_TRIM( *str, trim_set ) ) {
     ++str;
     --len;
   }
 
-  /* Trim at end */
-  while ( end > str && SHOULD_TRIM( *end, trim_set ) ) {
+  /* Trim at end.
+   * UTF-8 safety: same guard — stop if we hit a multi-byte byte. */
+  while ( end > str
+          && !(is_utf8 && (unsigned char)*end >= 0x80)
+          && SHOULD_TRIM( *end, trim_set ) ) {
     end--;
     --len;
   }
@@ -193,22 +201,31 @@ IV _trim_inplace( pTHX_ SV *sv, const char *trim_set ) {
   char *end;
   STRLEN lead = 0;
   STRLEN trail = 0;
+  int is_utf8;
 
   SvPV_force_nolen(sv);
   str = SvPVX(sv);
   len = SvCUR(sv);
+  is_utf8 = SvUTF8(sv) ? 1 : 0;
 
   if ( len == 0 )
     return 0;
 
   end = str + len - 1;
 
-  /* count and skip leading trim characters */
-  while ( lead < len && SHOULD_TRIM( (unsigned char) str[lead], trim_set ) )
+  /* count and skip leading trim characters.
+   * UTF-8 safety: bytes >= 0x80 are part of multi-byte sequences
+   * and must not be trimmed individually. */
+  while ( lead < len
+          && !(is_utf8 && (unsigned char) str[lead] >= 0x80)
+          && SHOULD_TRIM( (unsigned char) str[lead], trim_set ) )
     ++lead;
 
-  /* count trailing trim characters (don't go past the leading trim point) */
-  while ( end > (str + lead) && SHOULD_TRIM( (unsigned char) *end, trim_set ) ) {
+  /* count trailing trim characters (don't go past the leading trim point).
+   * UTF-8 safety: same guard — stop if we hit a multi-byte byte. */
+  while ( end > (str + lead)
+          && !(is_utf8 && (unsigned char) *end >= 0x80)
+          && SHOULD_TRIM( (unsigned char) *end, trim_set ) ) {
     --end;
     ++trail;
   }
