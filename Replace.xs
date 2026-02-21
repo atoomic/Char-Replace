@@ -230,7 +230,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   SSize_t       map_top;                    /* highest valid index in the map */
   int           is_utf8;                    /* whether the input string is UTF-8 */
 
-  if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
+  if ( !map || !SvROK(map) || SvTYPE(SvRV(map)) != SVt_PVAV
     || AvFILL( SvRV(map) ) < 0
     ) {
       src = SvPV(sv, len);
@@ -460,7 +460,7 @@ IV _replace_inplace( pTHX_ SV *sv, SV *map ) {
   int is_utf8;
   IV count = 0;
 
-  if ( !map || SvTYPE(map) != SVt_RV || SvTYPE(SvRV(map)) != SVt_PVAV
+  if ( !map || !SvROK(map) || SvTYPE(SvRV(map)) != SVt_PVAV
     || AvFILL( SvRV(map) ) < 0
     ) {
       return 0; /* no valid map, nothing to do */
