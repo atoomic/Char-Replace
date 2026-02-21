@@ -13,6 +13,7 @@
 #include <EXTERN.h>
 #include <perl.h>
 #include <XSUB.h>
+#include "ppport.h"
 #include <embed.h>
 
 #define IS_SPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
@@ -39,11 +40,7 @@
  */
 #define SHOULD_TRIM(c, trim_set) ((trim_set) ? (trim_set)[(unsigned char)(c)] : IS_SPACE(c))
 
-/* croak_sv was introduced in Perl 5.18; provide fallback for older versions.
- * Check PERL_REVISION to stay future-proof (Perl 7+ will have croak_sv). */
-#if PERL_REVISION == 5 && PERL_VERSION < 18
-#define croak_sv(sv) croak("%s", SvPV_nolen(sv))
-#endif
+/* croak_sv compatibility for Perl < 5.18 is now provided by ppport.h */
 
 SV *_replace_str( pTHX_ SV *sv, SV *map );
 SV *_trim_sv( pTHX_ SV *sv, const char *trim_set );
