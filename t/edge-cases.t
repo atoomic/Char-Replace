@@ -342,4 +342,42 @@ sub utf8_str { my ($s) = @_; utf8::upgrade($s); $s }
     is $result, "abcd", q[out-of-range NVs: identity preserved];
 }
 
+# ---------------------------------------------------------------------------
+# Weakened references: SvTYPE becomes SVt_PVMG, but SvROK still true
+# ---------------------------------------------------------------------------
+{
+    note "weakened map references";
+
+    eval { require Scalar::Util; Scalar::Util->import('weaken') };
+    my $have_weaken = !$@;
+
+    SKIP: {
+        skip "Scalar::Util::weaken not available", 6 unless $have_weaken;
+
+        my $map_arr = Char::Replace::build_map( 'a' => 'X', 'b' => 'Y' );
+
+        # Keep a strong ref so the AV doesn't get collected
+        my $strong = $map_arr;
+
+        # Weaken the reference — upgrades SV type to SVt_PVMG
+        weaken($map_arr);
+
+        # replace() should still work with weakened ref
+        my $r1 = Char::Replace::replace( "abc", $map_arr );
+        is $r1, "XYc", q[replace: weakened map ref works];
+
+        # replace_inplace() should still work with weakened ref
+        my $str = "aabb";
+        my $count = Char::Replace::replace_inplace( $str, $map_arr );
+        is $count, 4,      q[replace_inplace: weakened map ref, 4 replacements];
+        is $str,   "XXYY", q[replace_inplace: weakened map ref, correct result];
+
+        # replace_list() should still work (already uses SvROK)
+        my @results = Char::Replace::replace_list( ["ab", "ba", "cc"], $map_arr );
+        is $results[0], "XY", q[replace_list: weakened map ref, first string];
+        is $results[1], "YX", q[replace_list: weakened map ref, second string];
+        is $results[2], "cc", q[replace_list: weakened map ref, third string];
+    }
+}
+
 done_testing;
