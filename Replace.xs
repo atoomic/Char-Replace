@@ -224,6 +224,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   STRLEN   ix_newstr = 0;
   AV           *mapav;
   SV           *reply;
+  SV          **ary;                        /* map array elements (C89: declared at top) */
   SSize_t       map_top;                    /* highest valid index in the map */
   int           is_utf8;                    /* whether the input string is UTF-8 */
 
@@ -241,7 +242,7 @@ SV *_replace_str( pTHX_ SV *sv, SV *map ) {
   str_size = len + 64;
 
   mapav = (AV *)SvRV(map);
-  SV **ary = AvARRAY(mapav);
+  ary = AvARRAY(mapav);
   map_top = AvFILL(mapav);
   is_utf8 = SvUTF8(sv) ? 1 : 0;
 
