@@ -16,10 +16,10 @@ Requires: Test2::Bundle::Extended, Test2::Tools::Explain, Test2::Plugin::NoWarni
 
 ## Architecture
 
-- `Replace.xs` — Core C implementation (~600 lines)
+- `Replace.xs` — Core C implementation (~730 lines)
 - `lib/Char/Replace.pm` — Perl interface: `identity_map()`, `build_map()`, XS loader
 - `examples/` — Synopsis, benchmarks (replace, trim, fast-path)
-- `t/` — 12 test files, ~247 assertions
+- `t/` — 16 test files, ~562 assertions
 
 ## Public API
 
@@ -28,8 +28,8 @@ Requires: Test2::Bundle::Extended, Test2::Tools::Explain, Test2::Plugin::NoWarni
 | `replace($str, $map)` | Yes (new SV) | PV, IV, coderef, undef, empty string | General replacement |
 | `replace_inplace($str, $map)` | No | PV(len=1), IV, undef | In-place 1:1 replacement |
 | `replace_list(\@strs, $map)` | Yes (new SVs) | PV, IV, coderef, undef, empty string | Batch replacement (map built once) |
-| `trim($str)` | Yes (new SV) | N/A | Strip leading/trailing whitespace |
-| `trim_inplace($str)` | No | N/A | In-place whitespace stripping |
+| `trim($str [, $chars])` | Yes (new SV) | N/A | Strip leading/trailing characters |
+| `trim_inplace($str [, $chars])` | No | N/A | In-place character stripping |
 | `identity_map()` | Yes | N/A | Returns 256-entry identity array |
 | `build_map(%pairs)` | Yes | All | Convenience map constructor |
 
@@ -37,6 +37,8 @@ Requires: Test2::Bundle::Extended, Test2::Tools::Explain, Test2::Plugin::NoWarni
 
 - **Fast path**: `_build_fast_map()` creates 256-byte lookup table for 1:1 maps
   (avoids per-byte SV type dispatch)
+- **Custom trim**: `_build_trim_set()` creates 256-byte boolean lookup;
+  `SHOULD_TRIM` macro dispatches between custom set and `IS_SPACE` (zero overhead for default)
 - **UTF-8 safety**: Multi-byte sequences (>= 0x80) copied through unchanged;
   map applied to ASCII bytes only
 - **Taint propagation**: Input taint flag propagated to output via `PROPAGATE_TAINT` macro
