@@ -237,4 +237,92 @@ subtest 'compiled map — single char string' => sub {
     is( Char::Replace::replace( "z", $compiled ), "z", "single char identity" );
 };
 
+# === replace_list() with compiled map ===
+
+subtest 'replace_list with compiled map — basic' => sub {
+    my $map = Char::Replace::build_map( 'a' => 'X', 'b' => 'Y' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["abc", "bca", "xyz"], $compiled );
+    is( $results[0], "XYc", "first element replaced" );
+    is( $results[1], "YcX", "second element replaced" );
+    is( $results[2], "xyz", "third element unchanged" );
+};
+
+subtest 'replace_list with compiled map matches regular map' => sub {
+    my $map = Char::Replace::build_map(
+        'a' => 'A', 'e' => 'E', 'i' => 'I', 'o' => 'O', 'u' => 'U',
+    );
+    my $compiled = Char::Replace::compile_map($map);
+    my @inputs = ("the quick brown fox", "jumps over the lazy dog", "");
+
+    my @compiled_results = Char::Replace::replace_list( \@inputs, $compiled );
+    my @regular_results  = Char::Replace::replace_list( \@inputs, $map );
+
+    for my $i (0 .. $#inputs) {
+        is( $compiled_results[$i], $regular_results[$i],
+            "compiled == regular for element $i" );
+    }
+};
+
+subtest 'replace_list with compiled map — UTF-8' => sub {
+    my $map = Char::Replace::build_map( 'a' => 'X' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["caf\x{e9}", "na\x{ef}f"], $compiled );
+    is( $results[0], "cXf\x{e9}", "UTF-8: cafe -> cXfe" );
+    is( $results[1], "nX\x{ef}f", "UTF-8: naif -> nXif" );
+};
+
+subtest 'replace_list with compiled map — undef and ref elements' => sub {
+    my $map = Char::Replace::build_map( 'a' => 'X' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @results = Char::Replace::replace_list( ["abc", undef, [1,2], "aaa"], $compiled );
+    is( scalar @results, 4, "4 results" );
+    is( $results[0], "Xbc",  "string replaced" );
+    is( $results[1], undef,  "undef -> undef" );
+    is( $results[2], undef,  "ref -> undef" );
+    is( $results[3], "XXX",  "all-a replaced" );
+};
+
+subtest 'replace_list with compiled map — large batch' => sub {
+    my $map = Char::Replace::build_map( 'a' => 'Z' );
+    my $compiled = Char::Replace::compile_map($map);
+
+    my @inputs = map { "a" x $_ } 1 .. 50;
+    my @results = Char::Replace::replace_list( \@inputs, $compiled );
+    is( scalar @results, 50, "50 results" );
+    for my $i (0 .. 49) {
+        is( $results[$i], "Z" x ($i + 1), "batch element $i" ) or last;
+    }
+};
+
+# === Sparse compiled map ===
+
+subtest 'compile_map with sparse map (few entries set)' => sub {
+    my @map;
+    $map[ ord('x') ] = 'Y';
+    $map[ ord('z') ] = 'W';
+
+    my $compiled = Char::Replace::compile_map(\@map);
+    ok( defined $compiled, "sparse map compiles" );
+
+    is( Char::Replace::replace( "xyz", $compiled ), "YyW",
+        "sparse compiled map: x->Y, z->W, y identity" );
+};
+
+subtest 'compile_map with only high-index entries' => sub {
+    my @map;
+    $map[200] = chr(201);
+
+    my $compiled = Char::Replace::compile_map(\@map);
+    ok( defined $compiled, "high-index sparse map compiles" );
+
+    my $str = "abc" . chr(200) . "def";
+    utf8::downgrade($str);
+    is( Char::Replace::replace( $str, $compiled ), "abc" . chr(201) . "def",
+        "high-index compiled map: only byte 200 replaced" );
+};
+
 done_testing;
