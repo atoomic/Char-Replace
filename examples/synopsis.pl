@@ -56,4 +56,14 @@ is Char::Replace::replace( q[abcd], \@MAP ), q[AAbc5], "a -> AA ; d -> 5";
     is $removed, 5, "5 whitespace bytes removed";
 }
 
+{ # trim with custom characters
+    is Char::Replace::trim( "xxhelloxx", "x" ), "hello", "trim custom chars";
+    is Char::Replace::trim( "..a.b.c..", "." ), "a.b.c", "trim dots";
+    is Char::Replace::trim( "00123400", "0" ),  "1234",  "trim zeros";
+
+    my $csv = ",,value,,";
+    Char::Replace::trim_inplace( $csv, "," );
+    is $csv, "value", "trim_inplace custom chars";
+}
+
 done_testing;

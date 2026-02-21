@@ -32,6 +32,13 @@
 #define IS_CODEREF(sv) (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV)
 #define PROPAGATE_TAINT(from, to) do { if (SvTAINTED(from)) SvTAINTED_on(to); } while (0)
 
+/*
+ * SHOULD_TRIM: check whether a byte should be trimmed.
+ * When trim_set is non-NULL, use the 256-byte lookup table.
+ * When trim_set is NULL, fall back to IS_SPACE (default whitespace).
+ */
+#define SHOULD_TRIM(c, trim_set) ((trim_set) ? (trim_set)[(unsigned char)(c)] : IS_SPACE(c))
+
 /* croak_sv was introduced in Perl 5.18; provide fallback for older versions.
  * Check PERL_REVISION to stay future-proof (Perl 7+ will have croak_sv). */
 #if PERL_REVISION == 5 && PERL_VERSION < 18
@@ -39,9 +46,21 @@
 #endif
 
 SV *_replace_str( pTHX_ SV *sv, SV *map );
-SV *_trim_sv( pTHX_ SV *sv );
+SV *_trim_sv( pTHX_ SV *sv, const char *trim_set );
 IV _replace_inplace( pTHX_ SV *sv, SV *map );
-IV _trim_inplace( pTHX_ SV *sv );
+IV _trim_inplace( pTHX_ SV *sv, const char *trim_set );
+
+/*
+ * _build_trim_set: populate a 256-byte boolean lookup table from a
+ * charset string. Each byte in the charset marks a character to trim.
+ * The table is zeroed first, then set to 1 for each byte in chars.
+ */
+static void _build_trim_set( const char *chars, STRLEN chars_len, char trim_set[256] ) {
+  STRLEN i;
+  memset(trim_set, 0, 256);
+  for ( i = 0; i < chars_len; ++i )
+    trim_set[(unsigned char) chars[i]] = 1;
+}
 
 /*
  * ensure_buffer_space: grow the buffer if needed to accommodate additional bytes.
@@ -115,7 +134,7 @@ static int _build_fast_map( pTHX_ char fast_map[256], SV **ary, SSize_t map_top 
   return 1;
 }
 
-SV *_trim_sv( pTHX_ SV *sv ) {
+SV *_trim_sv( pTHX_ SV *sv, const char *trim_set ) {
   STRLEN len;
   char *str = SvPV(sv, len);
   char *end;
@@ -129,14 +148,14 @@ SV *_trim_sv( pTHX_ SV *sv ) {
 
   end = str + len - 1;
 
-  // Skip whitespace at front...
-  while ( len > 0 && IS_SPACE( (unsigned char) *str) ) {
+  /* Skip trim characters at front */
+  while ( len > 0 && SHOULD_TRIM( *str, trim_set ) ) {
     ++str;
     --len;
   }
 
-  // Trim at end...
-  while (end > str && IS_SPACE( (unsigned char) *end) ) {
+  /* Trim at end */
+  while ( end > str && SHOULD_TRIM( *end, trim_set ) ) {
     end--;
     --len;
   }
@@ -154,7 +173,7 @@ SV *_trim_sv( pTHX_ SV *sv ) {
  * Uses sv_chop() to advance past leading whitespace efficiently,
  * and adjusts SvCUR for trailing whitespace.
  */
-IV _trim_inplace( pTHX_ SV *sv ) {
+IV _trim_inplace( pTHX_ SV *sv, const char *trim_set ) {
   STRLEN len;
   char *str;
   char *end;
@@ -170,12 +189,12 @@ IV _trim_inplace( pTHX_ SV *sv ) {
 
   end = str + len - 1;
 
-  /* count and skip leading whitespace */
-  while ( lead < len && IS_SPACE( (unsigned char) str[lead] ) )
+  /* count and skip leading trim characters */
+  while ( lead < len && SHOULD_TRIM( (unsigned char) str[lead], trim_set ) )
     ++lead;
 
-  /* count trailing whitespace (don't go past the leading trim point) */
-  while ( end > (str + lead) && IS_SPACE( (unsigned char) *end ) ) {
+  /* count trailing trim characters (don't go past the leading trim point) */
+  while ( end > (str + lead) && SHOULD_TRIM( (unsigned char) *end, trim_set ) ) {
     --end;
     ++trail;
   }
@@ -567,11 +586,19 @@ OUTPUT:
   RETVAL
 
 SV*
-trim(sv)
+trim(sv, ...)
   SV *sv;
 CODE:
   if ( sv && SvOK(sv) && !SvROK(sv) ) {
-     RETVAL = _trim_sv( aTHX_ sv );
+     const char *trim_set = NULL;
+     char trim_buf[256];
+     if ( items >= 2 && SvOK(ST(1)) && !SvROK(ST(1)) ) {
+       STRLEN chars_len;
+       const char *chars = SvPV(ST(1), chars_len);
+       _build_trim_set(chars, chars_len, trim_buf);
+       trim_set = trim_buf;
+     }
+     RETVAL = _trim_sv( aTHX_ sv, trim_set );
   } else {
      RETVAL = &PL_sv_undef;
   }
@@ -592,11 +619,19 @@ OUTPUT:
   RETVAL
 
 IV
-trim_inplace(sv)
+trim_inplace(sv, ...)
   SV *sv;
 CODE:
   if ( sv && SvOK(sv) && !SvROK(sv) ) {
-     RETVAL = _trim_inplace( aTHX_ sv );
+     const char *trim_set = NULL;
+     char trim_buf[256];
+     if ( items >= 2 && SvOK(ST(1)) && !SvROK(ST(1)) ) {
+       STRLEN chars_len;
+       const char *chars = SvPV(ST(1), chars_len);
+       _build_trim_set(chars, chars_len, trim_buf);
+       trim_set = trim_buf;
+     }
+     RETVAL = _trim_inplace( aTHX_ sv, trim_set );
   } else {
      RETVAL = 0;
   }
