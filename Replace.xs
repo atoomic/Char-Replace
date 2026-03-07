@@ -676,7 +676,7 @@ SV *_compile_map( pTHX_ SV *map ) {
 
   if ( !_build_fast_map( aTHX_ fast_map, ary, map_top ) )
     croak("compile_map: map contains entries not eligible for compilation"
-          " (coderefs or multi-char strings)");
+          " (coderefs, multi-char strings, or empty strings)");
 
   obj = newSVpvn(fast_map, COMPILED_MAP_SIZE);
   ref = newRV_noinc(obj);
