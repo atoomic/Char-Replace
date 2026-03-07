@@ -764,6 +764,68 @@ OUTPUT:
   RETVAL
 
 void
+replace_inplace_list(strings_ref, map)
+  SV *strings_ref;
+  SV *map;
+PPCODE:
+{
+  AV *strings;
+  SSize_t i, num_strings;
+  const char *fast_map_ptr = NULL;
+  char fast_map[256];
+
+  if ( !strings_ref || !SvROK(strings_ref)
+       || SvTYPE(SvRV(strings_ref)) != SVt_PVAV )
+    croak("replace_inplace_list: first argument must be an array reference");
+
+  strings = (AV *)SvRV(strings_ref);
+  num_strings = av_len(strings) + 1;
+
+  /* Check for compiled map first (precomputed 256-byte lookup) */
+  {
+    char *compiled = _is_compiled_map(aTHX_ map);
+    if ( compiled )
+      fast_map_ptr = compiled;
+  }
+
+  /* Build fast map from array if not already compiled */
+  if ( !fast_map_ptr && map && SvROK(map)
+       && SvTYPE(SvRV(map)) == SVt_PVAV
+       && AvFILL(SvRV(map)) >= 0 ) {
+    AV *mapav = (AV *)SvRV(map);
+    if ( _build_fast_map( aTHX_ fast_map, AvARRAY(mapav), AvFILL(mapav) ) )
+      fast_map_ptr = fast_map;
+  }
+
+  EXTEND(SP, num_strings);
+
+  for ( i = 0; i < num_strings; ++i ) {
+    SV **elem = av_fetch(strings, i, 0);
+
+    if ( !elem || !SvOK(*elem) || SvROK(*elem) ) {
+      PUSHs( sv_2mortal( newSViv(0) ) );
+      continue;
+    }
+
+    if ( fast_map_ptr ) {
+      /* Fast path: use precomputed lookup table */
+      IV count;
+      SvPV_force_nolen(*elem);
+      count = _apply_fast_map_inplace(fast_map_ptr, SvPVX(*elem),
+                                      SvCUR(*elem),
+                                      SvUTF8(*elem) ? 1 : 0);
+      if ( count )
+        SvSETMAGIC(*elem);
+      PUSHs( sv_2mortal( newSViv(count) ) );
+    } else {
+      /* General path: delegate to _replace_inplace per element */
+      PUSHs( sv_2mortal( newSViv(
+        _replace_inplace( aTHX_ *elem, map ) ) ) );
+    }
+  }
+}
+
+void
 replace_list(strings_ref, map)
   SV *strings_ref;
   SV *map;
