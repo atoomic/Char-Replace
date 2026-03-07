@@ -12,6 +12,18 @@ use warnings;
 
 # ABSTRACT: Perl naive XS character replacement as an alternate to substitute or transliterate
 
+use Exporter 'import';
+
+our @EXPORT_OK = qw(
+    replace
+    replace_inplace
+    replace_list
+    trim
+    trim_inplace
+    identity_map
+    build_map
+    compile_map
+);
 
 BEGIN {
 
