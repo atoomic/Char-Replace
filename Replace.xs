@@ -265,27 +265,22 @@ static SV *_apply_fast_map(pTHX_ const char *src, STRLEN len,
   if ( !is_utf8 ) {
     for ( i = 0; i < len; ++i )
       str[i] = fast_map[(unsigned char) src[i]];
-    str[len] = '\0';
-    SvCUR_set(reply, len);
   } else {
-    STRLEN out = 0;
-    for ( i = 0; i < len; ++i, ++out ) {
-      unsigned char c = (unsigned char) src[i];
+    /* 1:1 map preserves length — copy first, then patch ASCII bytes only */
+    memcpy(str, src, len);
+    for ( i = 0; i < len; ++i ) {
+      unsigned char c = (unsigned char) str[i];
       if ( c >= 0x80 ) {
         STRLEN seq_len = UTF8_SEQ_LEN(c);
-        STRLEN k;
         if ( i + seq_len > len ) seq_len = len - i;
-        for ( k = 0; k < seq_len; ++k )
-          str[out + k] = src[i + k];
         i += seq_len - 1;
-        out += seq_len - 1;
       } else {
-        str[out] = fast_map[c];
+        str[i] = fast_map[c];
       }
     }
-    str[out] = '\0';
-    SvCUR_set(reply, out);
   }
+  str[len] = '\0';
+  SvCUR_set(reply, len);
 
   if ( SvUTF8(orig) )
     SvUTF8_on(reply);
