@@ -235,6 +235,28 @@ Use C<replace()> when you need expansion, deletion, or dynamic callbacks.
 UTF-8 safety applies: multi-byte sequences are skipped, only ASCII bytes
 are eligible for replacement.
 
+=head2 @counts = replace_inplace_list( \@strings, $MAP )
+
+Batch version of C<replace_inplace()>: applies the same replacement map to
+every string in the input array B<in place>. Returns a list of replacement
+counts (one per element).
+
+    my $map = Char::Replace::build_map( 'a' => 'X', 'b' => 'Y' );
+    my @counts = Char::Replace::replace_inplace_list( \@strings, $map );
+    # each $strings[$i] is modified in place; $counts[$i] = number of bytes changed
+
+This is more efficient than calling C<replace_inplace()> in a loop because
+the replacement map is analysed once and reused across all strings. When the
+map is eligible for the fast path (1:1 byte replacements), the 256-byte
+lookup table is built once instead of per call.
+
+Input elements that are C<undef> or references produce C<0> in the output
+(no modification). The same restrictions as C<replace_inplace()> apply:
+maps with coderefs, multi-character strings, or empty strings will croak
+unless all entries are fast-path eligible.
+
+Croaks if the first argument is not an array reference.
+
 =head2 @results = replace_list( \@strings, $MAP )
 
 Batch version of C<replace()>: applies the same replacement map to every
