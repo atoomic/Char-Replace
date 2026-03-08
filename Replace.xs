@@ -759,6 +759,45 @@ OUTPUT:
   RETVAL
 
 void
+trim_list(strings_ref, ...)
+  SV *strings_ref;
+PPCODE:
+{
+  AV *strings;
+  SSize_t i, num_strings;
+  const char *trim_set = NULL;
+  char trim_buf[256];
+
+  if ( !strings_ref || !SvROK(strings_ref)
+       || SvTYPE(SvRV(strings_ref)) != SVt_PVAV )
+    croak("trim_list: first argument must be an array reference");
+
+  /* Build trim set once from optional $chars argument */
+  if ( items >= 2 && SvOK(ST(1)) && !SvROK(ST(1)) ) {
+    STRLEN chars_len;
+    const char *chars = SvPV(ST(1), chars_len);
+    _build_trim_set(chars, chars_len, trim_buf);
+    trim_set = trim_buf;
+  }
+
+  strings = (AV *)SvRV(strings_ref);
+  num_strings = av_len(strings) + 1;
+
+  EXTEND(SP, num_strings);
+
+  for ( i = 0; i < num_strings; ++i ) {
+    SV **elem = av_fetch(strings, i, 0);
+
+    if ( !elem || !SvOK(*elem) || SvROK(*elem) ) {
+      PUSHs( &PL_sv_undef );
+      continue;
+    }
+
+    PUSHs( sv_2mortal( _trim_sv( aTHX_ *elem, trim_set ) ) );
+  }
+}
+
+void
 replace_inplace_list(strings_ref, map)
   SV *strings_ref;
   SV *map;

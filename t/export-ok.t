@@ -10,13 +10,13 @@ use Test2::Plugin::NoWarnings;
     require Char::Replace;
     my @expected = sort qw(
         replace replace_inplace replace_list
-        trim trim_inplace
+        trim trim_inplace trim_list
         identity_map build_map compile_map
     );
     is(
         [ sort @Char::Replace::EXPORT_OK ],
         \@expected,
-        '@EXPORT_OK contains all 8 public functions'
+        '@EXPORT_OK contains all 9 public functions'
     );
 }
 
