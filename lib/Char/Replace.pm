@@ -20,6 +20,7 @@ our @EXPORT_OK = qw(
     replace_list
     trim
     trim_inplace
+    trim_list
     identity_map
     build_map
     compile_map
@@ -321,6 +322,24 @@ efficient leading-character removal.
     # $csv is now "value", $n2 is 4
 
 The UTF-8 state of the string is preserved.
+
+=head2 @results = trim_list( \@strings )
+
+=head2 @results = trim_list( \@strings, $chars )
+
+Batch version of C<trim()>: trims leading and trailing characters from every
+string in the input array. Returns a list of trimmed strings.
+
+    my @results = Char::Replace::trim_list( \@strings );
+    my @results = Char::Replace::trim_list( \@strings, "x" );
+
+This is more efficient than calling C<trim()> in a loop because the trim set
+is built once and reused across all strings.
+
+Input elements that are C<undef> or references produce C<undef> in the output.
+Numeric values are coerced to strings.
+
+Croaks if the first argument is not an array reference.
 
 =head1 Benchmarks
 
